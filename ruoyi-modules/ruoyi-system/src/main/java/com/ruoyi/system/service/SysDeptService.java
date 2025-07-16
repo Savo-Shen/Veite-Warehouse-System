@@ -229,7 +229,7 @@ public class SysDeptService implements DeptService {
      * @param bo 部门信息
      * @return 结果
      */
-    @CacheEvict(cacheNames = CacheNames.SYS_DEPT, key = "#dept.deptId")
+    @CacheEvict(cacheNames = CacheNames.SYS_DEPT, key = "#bo.deptId")
     public int updateDept(SysDeptBo bo) {
         SysDept dept = MapstructUtils.convert(bo, SysDept.class);
         SysDept newParentDept = deptMapper.selectById(dept.getParentId());
