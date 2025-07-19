@@ -326,6 +326,20 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!-- JUnit 5 dependencies -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>5.10.0</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
+                <version>5.10.0</version>
+                <scope>test</scope>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
@@ -385,10 +399,15 @@
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
                     <argLine>-Dfile.encoding=UTF-8</argLine>
-                    <!-- 根据打包环境执行对应的@Tag测试方法 -->
-                    <groups>${profiles.active}</groups>
-                    <!-- 排除标签 -->
-                    <excludedGroups>exclude</excludedGroups>
+                    <useModulePath>false</useModulePath>
+                    <includes>
+                        <include>**/*Test.java</include>
+                    </includes>
+                    <providers>
+                        <provider>
+                            <name>junit-platform</name>
+                        </provider>
+                    </providers>
                 </configuration>
             </plugin>
             <!-- 统一版本号管理 -->
