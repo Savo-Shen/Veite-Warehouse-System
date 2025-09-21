@@ -1,1 +1,2 @@
-./仓库出入库管理系统.code-workspace
+*.code-workspace
+.DS_Store
