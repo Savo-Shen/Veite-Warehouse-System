@@ -8,6 +8,12 @@
 
 ## 运行问题
 
+### 基本问题
+
+遇到无法运行的问题优先两板斧
+1. `mvn clean install`
+2. `mvn clean compile`
+
 ### 1. 运行时报错找不到类
 
 > 错误: 无法初始化主类 com.ruoyi.RuoYiApplication
