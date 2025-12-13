@@ -71,12 +71,12 @@ case "$1" in
     status)
         STATUS=0
         if lsof -i :8080 >/dev/null 2>&1; then
-            echo "端口 8080 被占用，系统正在运行"
+            echo "端口 8080 被占用，后端系统正在运行"
             lsof -i :8080
             STATUS=1
         fi
         if lsof -i :80 >/dev/null 2>&1; then
-            echo "端口 80 被占用，系统正在运行"
+            echo "端口 80 被占用，前端系统正在运行"
             lsof -i :80
             STATUS=1
         fi
