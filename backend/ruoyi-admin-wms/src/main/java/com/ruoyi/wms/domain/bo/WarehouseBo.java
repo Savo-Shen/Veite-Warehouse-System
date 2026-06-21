@@ -41,4 +41,9 @@ public class WarehouseBo extends BaseEntity {
      * 排序
      */
     private Long orderNum;
+
+    /**
+     * 货架3D布局（JSON）
+     */
+    private String shelfLayout;
 }

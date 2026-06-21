@@ -82,4 +82,16 @@ export function updateOrderNum (data) {
   });
 };
 
+/**
+ * 保存货架3D布局
+ * @param {{id:number, shelfLayout:string}} data
+ */
+export function saveShelfLayout (data) {
+  return request({
+    url: '/wms/warehouse/shelfLayout',
+    method: 'put',
+    data: data
+  });
+};
+
 

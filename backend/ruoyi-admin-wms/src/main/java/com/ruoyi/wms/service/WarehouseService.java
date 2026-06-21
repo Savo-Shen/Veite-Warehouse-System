@@ -102,6 +102,16 @@ public class WarehouseService extends ServiceImpl<WarehouseMapper, Warehouse> {
         warehouseMapper.updateById(update);
     }
 
+    /**
+     * 仅保存货架3D布局（不触发名称/编号校验）
+     */
+    public void updateShelfLayout(Long id, String shelfLayout) {
+        Warehouse update = new Warehouse();
+        update.setId(id);
+        update.setShelfLayout(shelfLayout);
+        warehouseMapper.updateById(update);
+    }
+
     private void validateWarehouseNameAndNo(WarehouseBo warehouse) {
         LambdaQueryWrapper<Warehouse> queryWrapper = Wrappers.lambdaQuery();
         queryWrapper.eq(Warehouse::getWarehouseName, warehouse.getWarehouseName()).or().eq(StrUtil.isNotBlank(warehouse.getWarehouseCode()), Warehouse::getWarehouseCode, warehouse.getWarehouseCode());
