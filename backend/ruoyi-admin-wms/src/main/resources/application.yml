@@ -62,6 +62,9 @@ user:
 spring:
   application:
     name: ${ruoyi.name}
+  # 可选导入本地配置（application-local.yml 已被 git 忽略，用于存放数据库账号密码等敏感信息）
+  config:
+    import: optional:classpath:application-local.yml
   # 资源信息
   messages:
     # 国际化资源文件路径
@@ -116,8 +119,8 @@ sa-token:
   is-read-cookie: false
   # token前缀
   token-prefix: "Bearer"
-  # jwt秘钥
-  jwt-secret-key: abcdefghijklmnopqrstuvwxyz
+  # jwt秘钥（务必通过环境变量 JWT_SECRET_KEY 覆盖为随机长字符串，默认值仅用于本地）
+  jwt-secret-key: ${JWT_SECRET_KEY:abcdefghijklmnopqrstuvwxyz}
 
 # security配置
 security:
