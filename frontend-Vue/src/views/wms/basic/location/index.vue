@@ -1,19 +1,44 @@
 <template>
   <div class="app-container">
+    <!-- 搜索 -->
     <el-card>
       <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter="handleQuery">
         <el-form-item label="位置名称" prop="keywords">
           <el-input
             v-model="queryParams.keywords"
-            placeholder="请输入位置名称"
+            placeholder="请输入位置编码/名称"
             clearable
           />
+        </el-form-item>
+        <el-form-item label="所属仓库" prop="warehouseId">
+          <el-select v-model="queryParams.warehouseId" clearable filterable placeholder="全部仓库" @change="handleQuery" style="width: 180px;">
+            <el-option v-for="w in useWmsStore().warehouseList" :key="w.id" :label="w.warehouseName" :value="w.id"/>
+          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
         </el-form-item>
       </el-form>
+    </el-card>
+
+    <!-- 货架示意图（中间，3D 可拖拽排布） -->
+    <el-card class="mt20">
+      <div class="mb8" style="display:flex; align-items:center; gap:12px; flex-wrap: wrap;">
+        <span style="font-size: large">货架示意图</span>
+        <el-select v-model="mapWarehouseId" filterable placeholder="选择仓库" style="width: 220px;">
+          <el-option v-for="w in useWmsStore().warehouseList" :key="w.id" :label="w.warehouseName" :value="w.id"/>
+        </el-select>
+        <span v-if="hoverInfo" style="color:#f56c6c;">
+          当前：{{ hoverInfo.locationCode }} {{ hoverInfo.locationName }}
+          <template v-if="parseCoord(hoverInfo.locationCode)">
+            （{{ parseCoord(hoverInfo.locationCode).floor }}楼 {{ parseCoord(hoverInfo.locationCode).row }}排
+            {{ parseCoord(hoverInfo.locationCode).col }}列 {{ parseCoord(hoverInfo.locationCode).cell }}格）
+          </template>
+        </span>
+        <span v-else style="color:#909399;">鼠标移到下方列表的某一行，或图中货位，即可高亮对照</span>
+      </div>
+      <ShelfMap :warehouse-id="mapWarehouseId" :highlight-id="highlightId" editable @cell-hover="onMapHover"/>
     </el-card>
 
     <el-card class="mt20">
@@ -31,10 +56,25 @@
         </el-col>
       </el-row>
 
-      <el-table v-loading="loading" :data="locationList" border stripe class="mt20" empty-text="暂无位置">
+      <el-table v-loading="loading" :data="locationList" border stripe class="mt20" empty-text="暂无位置"
+                highlight-current-row @cell-mouse-enter="onRowHover">
         <el-table-column label="位置编码" prop="locationCode" />
         <el-table-column label="位置名称" prop="locationName" />
-        <el-table-column label="备注" prop="remark" width="360"/>
+        <el-table-column label="所属仓库" prop="warehouseId">
+          <template #default="{ row }">
+            {{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName || '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="货架坐标" width="180">
+          <template #default="{ row }">
+            <el-tag v-if="parseCoord(row.locationCode)" type="success" effect="plain">
+              {{ parseCoord(row.locationCode).floor }}楼 · {{ parseCoord(row.locationCode).row }}排 ·
+              {{ parseCoord(row.locationCode).col }}列 · {{ parseCoord(row.locationCode).cell }}格
+            </el-tag>
+            <span v-else style="color:#c0c4cc">编码非货架格式</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="备注" prop="remark" show-overflow-tooltip/>
         <el-table-column label="操作" align="right" class-name="small-padding fixed-width" width="180">
           <template #default="scope">
             <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['wms:location:edit']">修改</el-button>
@@ -44,15 +84,26 @@
       </el-table>
 
     </el-card>
+
     <!-- 添加或修改商品位置对话框 -->
     <el-drawer :title="title" v-model="open" size="50%" append-to-body>
-      <el-form ref="locationRef" :model="form" :rules="rules" label-width="80px" @submit.prevent @keyup.enter="submitForm">
+      <el-form ref="locationRef" :model="form" :rules="rules" label-width="90px" @submit.prevent @keyup.enter="submitForm">
         <el-form-item label="位置编码" prop="locationCode">
-          <el-input v-model="form.locationCode" placeholder="请输入位置编码" />
+          <el-input v-model="form.locationCode" placeholder="如 2-B2-3（楼层-排列-格）" />
         </el-form-item>
         <el-form-item label="位置名称" prop="locationName">
           <el-input v-model="form.locationName" placeholder="请输入位置名称" />
         </el-form-item>
+        <el-form-item label="所属仓库" prop="warehouseId">
+          <el-select v-model="form.warehouseId" clearable filterable placeholder="请选择仓库" style="width: 100%;">
+            <el-option v-for="w in useWmsStore().warehouseList" :key="w.id" :label="w.warehouseName" :value="w.id"/>
+          </el-select>
+        </el-form-item>
+        <el-alert
+          type="info" :closable="false" show-icon
+          title="位置编码即货架坐标，格式 楼层-排列-格，例如 2-B2-3 = 2楼/B排/第2列/第3格。按此格式填写后，该货位会自动出现在货架示意图上。"
+          style="margin-bottom: 16px;"
+        />
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" placeholder="请输入备注" />
         </el-form-item>
@@ -71,8 +122,13 @@
 import { listLocationNoPage, listLocation, getLocation, addLocation, updateLocation, delLocation } from "@/api/wms/location";
 import {ElMessageBox} from "element-plus";
 import {useWmsStore} from '@/store/modules/wms'
+import ShelfMap from '@/views/components/ShelfMap.vue'
+import {parseLocationCode} from '@/utils/shelf'
 
 const { proxy } = getCurrentInstance();
+
+/** 解析位置编码为货架坐标 */
+const parseCoord = (code) => parseLocationCode(code)
 
 const locationList = ref([]);
 const open = ref(false);
@@ -82,6 +138,11 @@ const ids = ref([]);
 const total = ref(0);
 const title = ref("");
 
+// 货架示意图相关
+const mapWarehouseId = ref(undefined);
+const highlightId = ref(undefined);
+const hoverInfo = ref(null);
+
 const data = reactive({
   form: {},
   queryParams: {
@@ -90,7 +151,8 @@ const data = reactive({
     locationName: undefined,
     locationCode: undefined,
     remark: undefined,
-    keywords: undefined
+    keywords: undefined,
+    warehouseId: undefined,
   },
   rules: {
     locationName: [
@@ -114,8 +176,32 @@ async function getList() {
   if (queryParams.value.keywords) {
     list = list.filter(it => it.locationName.includes(queryParams.value.keywords) || it.locationCode.includes(queryParams.value.keywords) || (it.remark && it.remark.includes(queryParams.value.keywords)))
   }
+  if (queryParams.value.warehouseId) {
+    list = list.filter(it => it.warehouseId === queryParams.value.warehouseId)
+  }
   locationList.value = list;
+  // 默认货架图仓库：优先用筛选的仓库，否则第一个仓库
+  if (!mapWarehouseId.value) {
+    mapWarehouseId.value = queryParams.value.warehouseId || store.warehouseList?.[0]?.id;
+  }
   loading.value = false;
+}
+
+/** 列表行 hover：在货架图上高亮对应货位 */
+function onRowHover(row) {
+  if (!row || !parseCoord(row.locationCode)) {
+    hoverInfo.value = null;
+    return;
+  }
+  if (row.warehouseId) mapWarehouseId.value = row.warehouseId;
+  highlightId.value = row.id;
+  hoverInfo.value = row;
+}
+
+/** 货架图货位 hover：展示该货位信息 */
+function onMapHover(loc) {
+  highlightId.value = loc.id;
+  hoverInfo.value = loc;
 }
 
 // 取消按钮
@@ -130,6 +216,7 @@ function reset() {
     id: null,
     locationCode: null,
     locationName: null,
+    warehouseId: null,
     remark: null,
     createBy: null,
     createTime: null,

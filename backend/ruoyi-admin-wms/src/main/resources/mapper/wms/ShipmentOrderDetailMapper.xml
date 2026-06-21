@@ -4,4 +4,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.wms.mapper.ShipmentOrderDetailMapper">
 
+    <!-- 查询客户已出库(order_status=1)的商品出库记录，按出库时间倒序，服务层取每个sku的第一条作为最近报价 -->
+    <select id="queryRecentPriceList" resultType="com.ruoyi.wms.domain.vo.SkuLastPriceVo">
+        select d.sku_id      as skuId,
+               d.quantity    as quantity,
+               d.amount      as amount,
+               o.order_no    as orderNo,
+               o.create_time as createTime
+        from wms_shipment_order_detail d
+        inner join wms_shipment_order o on d.order_id = o.id
+        where o.merchant_id = #{merchantId}
+          and o.order_status = 1
+          and d.quantity > 0
+          and d.amount is not null
+          and d.sku_id in
+        <foreach collection="skuIds" item="skuId" open="(" separator="," close=")">
+            #{skuId}
+        </foreach>
+        order by o.create_time desc, d.id desc
+    </select>
+
 </mapper>

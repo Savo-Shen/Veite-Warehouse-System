@@ -615,6 +615,10 @@ function getDailyPData() {
 }
 
 function initMap() {
+  // 未加载百度地图 SDK 时直接跳过，避免报错
+  if (typeof BMapGL === 'undefined') {
+    return
+  }
   map.value = new BMapGL.Map('boardMap')
   // map.value.addEventListener('click', function (e) {
   //   console.log('点击位置坐标：', e.latlng.lng, e.latlng.lat)

@@ -41,6 +41,11 @@ public class LocationBo extends BaseEntity {
     private String locationName;
 
     /**
+     * 所属仓库
+     */
+    private Long warehouseId;
+
+    /**
      * 备注
      */
     private String remark;

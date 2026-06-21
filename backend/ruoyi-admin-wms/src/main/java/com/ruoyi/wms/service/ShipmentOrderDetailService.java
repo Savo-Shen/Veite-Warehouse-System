@@ -11,14 +11,18 @@ import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.wms.domain.bo.ShipmentOrderDetailBo;
 import com.ruoyi.wms.domain.entity.ShipmentOrderDetail;
 import com.ruoyi.wms.domain.vo.ShipmentOrderDetailVo;
+import com.ruoyi.wms.domain.vo.SkuLastPriceVo;
 import com.ruoyi.wms.mapper.ShipmentOrderDetailMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
-// import java.util.Map;
+import java.util.Map;
 
 /**
  * 出库单详情Service业务层处理
@@ -105,5 +109,20 @@ public class ShipmentOrderDetailService extends ServiceImpl<ShipmentOrderDetailM
         List<ShipmentOrderDetailVo> details = queryList(bo);
         itemSkuService.setItemSkuMap(details);
         return details;
+    }
+
+    /**
+     * 查询客户每个规格最近一次出库的价格
+     */
+    public List<SkuLastPriceVo> queryLastPrices(Long merchantId, List<Long> skuIds) {
+        if (merchantId == null || CollUtil.isEmpty(skuIds)) {
+            return new ArrayList<>();
+        }
+        List<SkuLastPriceVo> records = shipmentOrderDetailMapper.queryRecentPriceList(merchantId, skuIds);
+        // 记录已按出库时间倒序，每个sku仅保留最近一条
+        Map<Long, SkuLastPriceVo> lastBySku = new LinkedHashMap<>();
+        records.forEach(it -> lastBySku.putIfAbsent(it.getSkuId(), it));
+        lastBySku.values().forEach(it -> it.setPrice(it.getAmount().divide(it.getQuantity(), 2, RoundingMode.HALF_UP)));
+        return new ArrayList<>(lastBySku.values());
     }
 }

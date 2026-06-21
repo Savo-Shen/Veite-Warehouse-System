@@ -89,6 +89,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="bo.itemLocationId != null">
                 and loc.id = #{bo.itemLocationId}
             </if>
+            <if test="bo.tagId != null">
+                and exists (
+                    select 1 from wms_item_tag_rel rel
+                    where rel.item_id = item.id and rel.tag_id = #{bo.tagId}
+                )
+            </if>
             <if test="itemKeywords != null and itemKeywords != ''">
                 <foreach collection="itemKeywords.split(' ')" item="word">
                     and (

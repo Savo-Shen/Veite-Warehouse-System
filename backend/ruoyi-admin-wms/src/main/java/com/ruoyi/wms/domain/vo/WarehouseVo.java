@@ -46,4 +46,9 @@ public class WarehouseVo extends BaseVo {
     @ExcelProperty(value = "备注")
     private String remark;
 
+    /**
+     * 货架3D布局（JSON）
+     */
+    private String shelfLayout;
+
 }

@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-// import java.util.Map;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -73,15 +73,19 @@ public class ShipmentOrderService {
     }
 
     private LambdaQueryWrapper<ShipmentOrder> buildQueryWrapper(ShipmentOrderBo bo) {
-        // Map<String, Object> params = bo.getParams();
+        Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<ShipmentOrder> lqw = Wrappers.lambdaQuery();
-        lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), ShipmentOrder::getOrderNo, bo.getOrderNo());
+        lqw.like(StringUtils.isNotBlank(bo.getOrderNo()), ShipmentOrder::getOrderNo, bo.getOrderNo());
+        lqw.like(StringUtils.isNotBlank(bo.getBizOrderNo()), ShipmentOrder::getBizOrderNo, bo.getBizOrderNo());
         lqw.eq(bo.getOptType() != null, ShipmentOrder::getOptType, bo.getOptType());
-        lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), ShipmentOrder::getOrderNo, bo.getOrderNo());
         lqw.eq(bo.getMerchantId() != null, ShipmentOrder::getMerchantId, bo.getMerchantId());
+        lqw.eq(bo.getWarehouseId() != null, ShipmentOrder::getWarehouseId, bo.getWarehouseId());
         lqw.eq(bo.getTotalAmount() != null, ShipmentOrder::getTotalAmount, bo.getTotalAmount());
         lqw.eq(bo.getTotalQuantity() != null, ShipmentOrder::getTotalQuantity, bo.getTotalQuantity());
         lqw.eq(bo.getOrderStatus() != null, ShipmentOrder::getOrderStatus, bo.getOrderStatus());
+        lqw.like(StringUtils.isNotBlank(bo.getRemark()), ShipmentOrder::getRemark, bo.getRemark());
+        lqw.between(params.get("beginTime") != null && params.get("endTime") != null,
+            BaseEntity::getCreateTime, params.get("beginTime"), params.get("endTime"));
         lqw.orderByDesc(BaseEntity::getCreateTime);
         return lqw;
     }

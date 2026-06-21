@@ -42,7 +42,7 @@
             </el-col>
             <el-col :span="6">
               <el-form-item label="客户" prop="merchantId">
-                <el-select v-model="form.merchantId" placeholder="请选择客户" clearable filterable>
+                <el-select v-model="form.merchantId" placeholder="请选择客户" clearable filterable @change="loadLastPrices">
                   <el-option v-for="item in useWmsStore().merchantList.filter(m => m.merchantType != 2)" :key="item.id" :label="item.merchantName"
                              :value="item.id"/>
                 </el-select>
@@ -150,6 +150,17 @@
                   :precision="2"
                   @change="handleChangeQuantity"
                 ></el-input-number>
+                <div v-if="lastPriceMap[String(row.skuId)]">
+                  <el-tooltip
+                    :content="'出库时间：' + parseTime(lastPriceMap[String(row.skuId)].createTime, '{y}-{m}-{d}')
+                      + '，单号：' + lastPriceMap[String(row.skuId)].orderNo + '，点击填入'"
+                    placement="top"
+                  >
+                    <el-link type="primary" :underline="false" @click="applyLastPrice(row)">
+                      上次报价：￥{{ Number(lastPriceMap[String(row.skuId)].price).toFixed(2) }}
+                    </el-link>
+                  </el-tooltip>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="金额" prop="amount" width="220" align="center">
@@ -211,7 +222,7 @@
 <script setup name="ShipmentOrderEdit">
 import {computed, getCurrentInstance, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addShipmentOrder, getShipmentOrder, updateShipmentOrder, shipment} from "@/api/wms/shipmentOrder";
-import {delShipmentOrderDetail} from "@/api/wms/shipmentOrderDetail";
+import {delShipmentOrderDetail, getLastPrices} from "@/api/wms/shipmentOrderDetail";
 import {ElMessage, ElMessageBox} from "element-plus";
 import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
@@ -286,8 +297,40 @@ const handleOkClick = (item) => {
         })
     }
   })
+  loadLastPrices()
 }
 // 选择商品 end
+
+// 客户历史报价 start
+// skuId -> 该客户最近一次出库记录 {price, orderNo, createTime}
+const lastPriceMap = ref({})
+
+const loadLastPrices = () => {
+  const merchantId = form.value.merchantId
+  const skuIds = (form.value.details || []).map(it => it.skuId).filter(Boolean)
+  if (!merchantId || !skuIds.length) {
+    lastPriceMap.value = {}
+    return
+  }
+  getLastPrices(merchantId, skuIds).then(res => {
+    const map = {}
+    if (res.data?.length) {
+      res.data.forEach(it => {
+        map[String(it.skuId)] = it
+      })
+    }
+    lastPriceMap.value = map
+  })
+}
+
+const applyLastPrice = (row) => {
+  const last = lastPriceMap.value[String(row.skuId)]
+  if (last) {
+    row.itemSku.sellingPrice = Number(last.price)
+    handleChangeQuantity()
+  }
+}
+// 客户历史报价 end
 
 // 初始化receipt-order-form ref
 const shipmentForm = ref()
@@ -427,6 +470,7 @@ const loadDetail = (id) => {
     }
     form.value = {...response.data}
     inventorySelectRef.value.setWarehouseId(form.value.warehouseId)
+    loadLastPrices()
     Promise.resolve();
   }).then(() => {
   }).finally(() => {

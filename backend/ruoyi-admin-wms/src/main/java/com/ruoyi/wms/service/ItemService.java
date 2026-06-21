@@ -36,6 +36,7 @@ public class ItemService {
     private final ItemMapper itemMapper;
     private final ItemSkuService itemSkuService;
     private final ItemCategoryMapper itemCategoryMapper;
+    private final ItemTagService itemTagService;
 
     /**
      * 查询物料
@@ -122,6 +123,7 @@ public class ItemService {
         itemMapper.insert(item);
         itemSkuService.setItemId(bo.getSku(),item.getId());
         itemSkuService.saveOrUpdateBatchByBo(bo.getSku());
+        itemTagService.setItemTags(item.getId(), bo.getTagIds());
     }
 
     /**
@@ -135,6 +137,7 @@ public class ItemService {
         itemMapper.updateById(MapstructUtils.convert(bo, Item.class));
         itemSkuService.setItemId(bo.getSku(),bo.getId());
         itemSkuService.saveOrUpdateBatchByBo(bo.getSku());
+        itemTagService.setItemTags(bo.getId(), bo.getTagIds());
     }
 
     /**

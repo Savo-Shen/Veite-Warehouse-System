@@ -41,5 +41,9 @@ public class Warehouse extends BaseEntity {
      */
     private String remark;
 
+    /**
+     * 货架3D布局（JSON，前端货架示意图使用）
+     */
+    private String shelfLayout;
 
 }

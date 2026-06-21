@@ -7,6 +7,8 @@ import com.ruoyi.wms.domain.entity.Inventory;
 import com.ruoyi.wms.domain.vo.InventoryVo;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 库存Mapper接口
  *
@@ -21,5 +23,10 @@ public interface InventoryMapper extends BaseMapperPlus<Inventory, InventoryVo> 
         @Param("itemKeywords") String itemKeywords
     );
     Page<InventoryVo> queryWarehouseBoardList(Page<InventoryVo> page, @Param("bo") InventoryBo bo, @Param("itemKeywords") String itemKeywords);
+
+    /**
+     * 查询用于导出的库存列表（不分页，复用看板查询条件）
+     */
+    List<InventoryVo> queryExportList(@Param("bo") InventoryBo bo, @Param("itemKeywords") String itemKeywords);
 
 }

@@ -37,6 +37,12 @@ public class LocationVo implements Serializable {
     private String locationName;
 
     /**
+     * 所属仓库
+     */
+    @ExcelProperty(value = "所属仓库")
+    private Long warehouseId;
+
+    /**
      * 备注
      */
     @ExcelProperty(value = "备注")
