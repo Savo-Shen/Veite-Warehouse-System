@@ -63,4 +63,9 @@ public class ItemBo extends BaseEntity {
 
     private List<ItemSkuBo> sku;
 
+    /**
+     * 商品标签ID集合（保存时按此集合替换商品标签）
+     */
+    private List<Long> tagIds;
+
 }

@@ -101,4 +101,9 @@ public class ItemSkuBo extends BaseEntity {
     private String itemLocationId;
 
     private Long itemBrand;
+
+    /**
+     * 标签ID（按标签筛选商品）
+     */
+    private Long tagId;
 }
