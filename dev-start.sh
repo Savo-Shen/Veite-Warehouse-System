@@ -5,6 +5,14 @@ echo "启动威特仓库管理系统 (开发模式)"
 # 获取脚本目录
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# 加载本地环境变量（数据库账号密码等，文件已被 .gitignore 忽略）
+if [ -f "$DIR/backend/.env" ]; then
+    echo "加载 backend/.env 环境变量..."
+    set -a
+    . "$DIR/backend/.env"
+    set +a
+fi
+
 # 清理函数
 cleanup() {
     echo "停止系统..."

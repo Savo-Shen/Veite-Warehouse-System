@@ -52,6 +52,40 @@
             @keyup.enter="handleQuery"
           />
         </el-form-item>
+        <el-form-item label="客户" prop="merchantId">
+          <el-select v-model="queryParams.merchantId" placeholder="请选择客户" clearable filterable
+                     style="width: 200px" @change="handleQuery">
+            <el-option v-for="item in useWmsStore().merchantList.filter(m => m.merchantType != 2)"
+                       :key="item.id" :label="item.merchantName" :value="item.id"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="仓库" prop="warehouseId">
+          <el-select v-model="queryParams.warehouseId" placeholder="请选择仓库" clearable filterable
+                     style="width: 200px" @change="handleQuery">
+            <el-option v-for="item in useWmsStore().warehouseList"
+                       :key="item.id" :label="item.warehouseName" :value="item.id"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="备注" prop="remark">
+          <el-input
+            v-model="queryParams.remark"
+            placeholder="请输入备注关键字"
+            clearable
+            @keyup.enter="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="创建时间">
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            range-separator="-"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            :default-time="[new Date(2000, 1, 1, 0, 0, 0), new Date(2000, 1, 1, 23, 59, 59)]"
+            @change="handleQuery"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -238,18 +272,22 @@ const data = reactive({
     orderNo: undefined,
     optType: -1,
     merchantId: undefined,
+    warehouseId: undefined,
     bizOrderNo: undefined,
+    remark: undefined,
     totalAmount: undefined,
     orderStatus: -2,
   },
 });
 
 const { queryParams } = toRefs(data);
+// 创建时间范围
+const dateRange = ref([]);
 
 /** 查询入库单列表 */
 function getList() {
   loading.value = true;
-  const query = {...queryParams.value}
+  const query = proxy.addDateRange({...queryParams.value}, dateRange.value)
   if (query.orderStatus === -2) {
     query.orderStatus = null
   }
@@ -275,6 +313,7 @@ function handleQuery() {
 
 /** 重置按钮操作 */
 function resetQuery() {
+  dateRange.value = [];
   proxy.resetForm("queryRef");
   handleQuery();
 }

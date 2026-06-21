@@ -109,6 +109,17 @@ public class WarehouseController extends BaseController {
         return R.ok();
     }
 
+    /**
+     * 保存货架3D布局
+     */
+    @SaCheckPermission("wms:warehouse:edit")
+    @Log(title = "仓库", businessType = BusinessType.UPDATE)
+    @PutMapping("/shelfLayout")
+    public R<Void> saveShelfLayout(@RequestBody WarehouseBo bo) {
+        warehouseService.updateShelfLayout(bo.getId(), bo.getShelfLayout());
+        return R.ok();
+    }
+
     @SaCheckPermission("wms:warehouse:edit")
     @Log(title = "仓库", businessType = BusinessType.UPDATE)
     @PostMapping("/update/orderNum")

@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import com.ruoyi.wms.domain.bo.InventoryBo;
+import com.ruoyi.wms.domain.vo.InventoryExportVo;
 import com.ruoyi.wms.domain.vo.InventoryVo;
 import com.ruoyi.wms.service.InventoryService;
 
@@ -66,13 +67,18 @@ public class InventoryController extends BaseController {
 
     /**
      * 导出库存列表
+     * <p>
+     * 支持按搜索条件导出全部结果，或仅导出前端勾选的库存（ids）。
      */
     @SaCheckPermission("wms:inventory:all")
     @Log(title = "库存", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
-    public void export(InventoryBo bo, HttpServletResponse response) {
-        List<InventoryVo> list = inventoryService.queryList(bo);
-        ExcelUtil.exportExcel(list, "库存", InventoryVo.class, response);
+    public void export(InventoryBo bo,
+                       @RequestParam(value = "itemKeywords", required = false) String itemKeywords,
+                       @RequestParam(value = "ids", required = false) List<Long> ids,
+                       HttpServletResponse response) {
+        List<InventoryExportVo> list = inventoryService.queryExportList(bo, itemKeywords, ids);
+        ExcelUtil.exportExcel(list, "库存", InventoryExportVo.class, response);
     }
 
     /**

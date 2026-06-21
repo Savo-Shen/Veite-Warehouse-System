@@ -1,6 +1,7 @@
 package com.ruoyi.wms.service;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -14,9 +15,12 @@ import com.ruoyi.wms.domain.bo.BaseOrderDetailBo;
 import com.ruoyi.wms.domain.bo.CheckOrderDetailBo;
 import com.ruoyi.wms.domain.bo.InventoryBo;
 import com.ruoyi.wms.domain.entity.Inventory;
+import com.ruoyi.wms.domain.entity.Warehouse;
+import com.ruoyi.wms.domain.vo.InventoryExportVo;
 import com.ruoyi.wms.domain.vo.InventoryVo;
 import com.ruoyi.wms.domain.vo.ItemSkuMapVo;
 import com.ruoyi.wms.mapper.InventoryMapper;
+import com.ruoyi.wms.mapper.WarehouseMapper;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,6 +42,8 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
 
     private final InventoryMapper inventoryMapper;
     private final ItemSkuService itemSkuService;
+    // 注入 Mapper 而非 WarehouseService，避免与 WarehouseService 形成循环依赖
+    private final WarehouseMapper warehouseMapper;
 
     /**
      * 查询库存
@@ -121,6 +127,69 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
     public TableDataInfo<InventoryVo> queryItemBoardList(InventoryBo bo, PageQuery pageQuery, String itemKeywords) {
         Page<InventoryVo> result = inventoryMapper.queryItemBoardList(pageQuery.build(), bo, itemKeywords);
         return TableDataInfo.build(result);
+    }
+
+    /**
+     * 查询库存导出数据
+     * <p>
+     * 复用看板查询条件（支持智能搜索及高级搜索），当传入勾选的库存 id 时，
+     * 仅导出勾选的记录；否则导出全部符合搜索条件的记录。
+     *
+     * @param bo           查询条件
+     * @param itemKeywords 智能搜索关键字
+     * @param ids          勾选的库存 id（可为空）
+     */
+    public List<InventoryExportVo> queryExportList(InventoryBo bo, String itemKeywords, Collection<Long> ids) {
+        List<InventoryVo> list = inventoryMapper.queryExportList(bo, itemKeywords);
+        if (CollUtil.isEmpty(list)) {
+            return Collections.emptyList();
+        }
+        // 仅导出勾选的记录
+        if (CollUtil.isNotEmpty(ids)) {
+            Set<Long> idSet = new HashSet<>(ids);
+            list = list.stream().filter(it -> idSet.contains(it.getId())).collect(Collectors.toList());
+        }
+        // 仓库名称映射
+        Map<Long, String> warehouseNameMap = warehouseMapper.selectList(null).stream()
+            .collect(Collectors.toMap(Warehouse::getId, Warehouse::getWarehouseName, (a, b) -> a));
+
+        return list.stream().map(it -> {
+            InventoryExportVo vo = new InventoryExportVo();
+            if (it.getItem() != null) {
+                vo.setItemName(it.getItem().getItemName());
+                vo.setItemCode(it.getItem().getItemCode());
+            }
+            BigDecimal costPrice = null;
+            BigDecimal sellingPrice = null;
+            if (it.getItemSku() != null) {
+                vo.setSkuName(it.getItemSku().getSkuName());
+                vo.setSkuCode(it.getItemSku().getSkuCode());
+                costPrice = it.getItemSku().getCostPrice();
+                sellingPrice = it.getItemSku().getSellingPrice();
+            }
+            if (it.getLocation() != null) {
+                String code = it.getLocation().getLocationCode();
+                String name = it.getLocation().getLocationName();
+                if (StrUtil.isNotBlank(code) && StrUtil.isNotBlank(name)) {
+                    vo.setLocationName(code + "（" + name + "）");
+                } else {
+                    vo.setLocationName(StrUtil.isNotBlank(code) ? code : name);
+                }
+            }
+            vo.setWarehouseName(warehouseNameMap.get(it.getWarehouseId()));
+            BigDecimal quantity = it.getQuantity() == null ? BigDecimal.ZERO : it.getQuantity();
+            vo.setQuantity(quantity);
+            vo.setCostPrice(costPrice);
+            vo.setSellingPrice(sellingPrice);
+            if (costPrice != null) {
+                vo.setTotalCost(quantity.multiply(costPrice));
+            }
+            if (sellingPrice != null) {
+                vo.setTotalSelling(quantity.multiply(sellingPrice));
+            }
+            vo.setRemark(it.getRemark());
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     public void updateInventory(List<CheckOrderDetailBo> details) {

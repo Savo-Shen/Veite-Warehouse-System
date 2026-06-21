@@ -25,6 +25,7 @@ import com.ruoyi.wms.domain.entity.ItemSku;
 import com.ruoyi.wms.domain.vo.BaseOrderDetailVo;
 import com.ruoyi.wms.domain.vo.ItemSkuMapVo;
 import com.ruoyi.wms.domain.vo.ItemSkuVo;
+import com.ruoyi.wms.domain.vo.ItemTagVo;
 import com.ruoyi.wms.mapper.ItemSkuMapper;
 
 import cn.hutool.core.collection.CollUtil;
@@ -40,6 +41,7 @@ public class ItemSkuService extends ServiceImpl<ItemSkuMapper, ItemSku> {
 
     private final ItemSkuMapper itemSkuMapper;
     private final InventoryService inventoryService;
+    private final ItemTagService itemTagService;
 
     /**
      * 查询sku信息
@@ -61,6 +63,20 @@ public class ItemSkuService extends ServiceImpl<ItemSkuMapper, ItemSku> {
     public TableDataInfo<ItemSkuMapVo> queryPageList(ItemSkuBo bo, PageQuery pageQuery, String itemKeywords) {
         //开始查sku
         IPage<ItemSkuMapVo> result = itemSkuMapper.selectByBo(pageQuery.build(), bo, itemKeywords);
+        // 填充每个商品的标签
+        List<ItemSkuMapVo> records = result.getRecords();
+        if (CollUtil.isNotEmpty(records)) {
+            Set<Long> itemIds = records.stream()
+                .filter(it -> it.getItem() != null)
+                .map(it -> it.getItem().getId())
+                .collect(Collectors.toSet());
+            Map<Long, List<ItemTagVo>> tagMap = itemTagService.queryTagMapByItemIds(itemIds);
+            records.forEach(it -> {
+                if (it.getItem() != null) {
+                    it.getItem().setTags(tagMap.getOrDefault(it.getItem().getId(), List.of()));
+                }
+            });
+        }
         return TableDataInfo.build(result);
     }
 

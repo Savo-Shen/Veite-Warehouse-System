@@ -68,6 +68,7 @@ public class LocationService {
         LambdaQueryWrapper<Location> lqw = Wrappers.lambdaQuery();
         lqw.eq(StrUtil.isNotBlank(bo.getLocationCode()), Location::getLocationCode, bo.getLocationCode());
         lqw.like(StrUtil.isNotBlank(bo.getLocationName()), Location::getLocationName, bo.getLocationName());
+        lqw.eq(bo.getWarehouseId() != null, Location::getWarehouseId, bo.getWarehouseId());
         return lqw;
     }
 

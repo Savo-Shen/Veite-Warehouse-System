@@ -43,6 +43,19 @@
                 ></el-option>
               </el-select>
             </el-form-item>
+            <el-form-item label="商品标签" prop="tagId">
+              <el-select v-model="queryParams.tagId" clearable filterable placeholder="按标签筛选" @change="handleQuery">
+                <el-option
+                  v-for="tag in useWmsStore().itemTagList"
+                  :key="tag.id"
+                  :label="tag.tagName"
+                  :value="tag.id"
+                >
+                  <span :style="{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', marginRight: '6px', background: tag.color }"/>
+                  <span>{{ tag.tagName }}</span>
+                </el-option>
+              </el-select>
+            </el-form-item>
           </div>
         </el-collapse-transition>
         
@@ -93,14 +106,31 @@
           <div style="flex: 1;  width: 100%;">
           <div style="display: flex;align-items: start;justify-content: space-between">
             <span class="mr10" style="font-size: 18px;">商品列表</span>
-            <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10">新增商品</el-button>
+            <div>
+              <el-button type="success" plain icon="PriceTag" @click="handleBatchTag" class="mb10"
+                         :disabled="!selectedItemIds.length">批量打标签{{ selectedItemIds.length ? `（${selectedItemIds.length}）` : '' }}</el-button>
+              <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10">新增商品</el-button>
+            </div>
           </div>
           <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border stripe empty-text="暂无商品" v-loading="loading" cell-class-name="my-cell">
-            <el-table-column label="商品信息" prop="itemId" min-width="160">
+            <el-table-column type="selection" width="46" align="center"/>
+            <el-table-column label="商品信息" prop="itemId" min-width="200">
               <template #default="{ row }">
                 <div>{{ row.item.itemName + (row.item.itemCode ? ('(' +  row.item.itemCode + ')') : '') }}</div>
                 <div v-if="row.item.itemBrand">{{ row.item.itemBrand ? ('品牌：' + useWmsStore().itemBrandMap.get(row.item.itemBrand)?.brandName) : '' }}</div>
                 <div v-if="row.item.itemCategory">{{ row.item.itemCategory ? ('分类：' + useWmsStore().itemCategoryMap.get(row.item.itemCategory)?.categoryName) : '' }}</div>
+                <div v-if="row.item.tags && row.item.tags.length" style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
+                  <el-tag
+                    v-for="tag in row.item.tags"
+                    :key="tag.id"
+                    :color="tag.color"
+                    effect="dark"
+                    size="small"
+                    closable
+                    style="border: none; color: #fff;"
+                    @close="handleRemoveTag(row, tag)"
+                  >{{ tag.tagName }}</el-tag>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="规格信息" prop="skuName" align="left" min-width="160">
@@ -145,19 +175,23 @@
             </el-table-column>
             <el-table-column label="位置" align="left" min-width="120">
               <template #default="{ row }">
-                <!-- <div>{{ row.location }}</div> -->
                 <dict-tag v-if="!row.location"
                 :customTags="[
                   { label: '暂无位置', type: 'info' }
                 ]"
               />
-              <div v-else>
-                <dict-tag :customTags="[
-                  { label: row.location.locationCode, type: '' }
-                ]"
-                />
-                <div>{{ row.location.locationName }}</div>
-              </div>
+              <el-popover v-else placement="right" trigger="hover" :width="320"
+                          :disabled="!hasShelf(row.location)">
+                <template #reference>
+                  <div style="cursor: default;">
+                    <dict-tag :customTags="[
+                      { label: row.location.locationCode, type: '' }
+                    ]"/>
+                    <div>{{ row.location.locationName }}</div>
+                  </div>
+                </template>
+                <ShelfMap :warehouse-id="shelfLoc(row.location)?.warehouseId" :highlight-id="row.location.id" single/>
+              </el-popover>
               </template>
             </el-table-column>
             <el-table-column label="操作" align="right" prop="itemId" width="200">
@@ -229,6 +263,22 @@
                       :label="item.brandName"
                       :value="item.id"
                     ></el-option>
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="商品标签" prop="tagIds">
+                  <el-select v-model="form.tagIds" multiple clearable filterable collapse-tags collapse-tags-tooltip
+                             placeholder="选择标签（可多选）" style="width: 100%!important;">
+                    <el-option
+                      v-for="tag in useWmsStore().itemTagList"
+                      :key="tag.id"
+                      :label="tag.tagName"
+                      :value="tag.id"
+                    >
+                      <span :style="{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', marginRight: '6px', background: tag.color }"/>
+                      <span>{{ tag.tagName }}</span>
+                    </el-option>
                   </el-select>
                 </el-form-item>
               </el-col>
@@ -382,6 +432,25 @@
       </template>
       <div id="qrcode"></div>
     </el-dialog>
+    <!-- 批量打标签对话框 -->
+    <el-dialog title="批量打标签" v-model="tagDialog.visible" width="460px" append-to-body :close-on-click-modal="false">
+      <div class="mb10" style="color: #909399;">已选择 {{ selectedItemIds.length }} 个商品，选择要添加的标签（可多选）：</div>
+      <el-select v-model="tagDialog.tagIds" multiple filterable clearable placeholder="请选择标签" style="width: 100%;">
+        <el-option v-for="tag in useWmsStore().itemTagList" :key="tag.id" :label="tag.tagName" :value="tag.id">
+          <span :style="{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', marginRight: '6px', background: tag.color }"/>
+          <span>{{ tag.tagName }}</span>
+        </el-option>
+      </el-select>
+      <div class="mt10" style="font-size: 12px; color: #c0c4cc;">
+        没有需要的标签？请到「基础资料 - 标签管理」中新建。
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button :loading="buttonLoading" type="primary" @click="submitBatchTag">确 定</el-button>
+          <el-button @click="tagDialog.visible = false">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
     <div id="outSkuIdBox" style="display: none">
       <img :src="qrcode"/>
       <canvas ref="barcode"></canvas>
@@ -401,6 +470,9 @@ import {
 } from "@/api/wms/itemCategory";
 import {getRowspanMethod} from "@/utils/getRowSpanMethod";
 import {listItemSkuPage, delItemSku, listItemSku} from "@/api/wms/itemSku";
+import {assignItemTags, removeItemTagRel} from "@/api/wms/itemTag";
+import ShelfMap from '@/views/components/ShelfMap.vue'
+import {parseLocationCode} from '@/utils/shelf'
 import {useRoute} from "vue-router";
 import Qrcode from 'qrcode'
 import JSBarcode from 'jsbarcode'
@@ -476,6 +548,7 @@ const initFormData = {
   unit: undefined,
   itemBrand: undefined,
   remark: undefined,
+  tagIds: [],
 }
 const initCategoryFormData = {
   id: undefined,
@@ -494,6 +567,7 @@ const data = reactive({
     itemName: undefined,
     itemLocationId: undefined,
     itemKeywords: undefined,
+    tagId: undefined,
   },
   rules: {
     id: [
@@ -672,8 +746,45 @@ const resetQuery = () => {
 /** 多选框选中数据 */
 const handleSelectionChange = (selection) => {
   ids.value = selection.map(item => item.id);
+  // 批量打标签是按“商品”维度，去重 itemId
+  selectedItemIds.value = [...new Set(selection.map(item => item.itemId).filter(Boolean))];
   single.value = selection.length != 1;
   multiple.value = !selection.length;
+}
+
+/** 批量打标签 */
+const selectedItemIds = ref([]);
+const tagDialog = reactive({
+  visible: false,
+  tagIds: [],
+});
+const handleBatchTag = () => {
+  if (!selectedItemIds.value.length) {
+    return proxy?.$modal.msgWarning("请先勾选商品");
+  }
+  tagDialog.tagIds = [];
+  tagDialog.visible = true;
+}
+const submitBatchTag = async () => {
+  if (!tagDialog.tagIds.length) {
+    return proxy?.$modal.msgWarning("请至少选择一个标签");
+  }
+  buttonLoading.value = true;
+  try {
+    await assignItemTags({ itemIds: selectedItemIds.value, tagIds: tagDialog.tagIds });
+    proxy?.$modal.msgSuccess("打标签成功");
+    tagDialog.visible = false;
+    await getList();
+  } finally {
+    buttonLoading.value = false;
+  }
+}
+/** 移除商品上的某个标签 */
+const handleRemoveTag = async (row, tag) => {
+  await proxy?.$modal.confirm(`确认移除商品【${row.item.itemName}】的标签【${tag.tagName}】吗？`);
+  await removeItemTagRel(row.itemId, tag.id);
+  proxy?.$modal.msgSuccess("移除成功");
+  await getList();
 }
 
 /** 新增按钮操作 */
@@ -698,6 +809,8 @@ const handleUpdate = (row) => {
     Object.assign(skuForm.itemSkuList, res.data)
     skuLoading.value = false
     Object.assign(form.value, row.item);
+    // 回填已有标签
+    form.value.tagIds = (row.item?.tags || []).map(t => t.id);
   });
 }
 const handleQueryType = (node, data) => {
@@ -830,6 +943,11 @@ const downloadQrcode = async (row) => {
   //提示信息
   // this.$message.warn('下载中，请稍后...')
 }
+/** 从 store 取该位置的完整信息（用于拿到所属仓库） */
+const shelfLoc = (loc) => loc ? useWmsStore().locationMap.get(loc.id) : null
+/** 位置编码能否解析出货架坐标（决定是否显示示意图） */
+const hasShelf = (loc) => !!(loc && parseLocationCode(loc.locationCode))
+
 const getVolumeText = (itemSku) => {
   if((itemSku.length || itemSku.length === 0) && (itemSku.width || itemSku.width === 0) && (itemSku.height || itemSku.height === 0)) {
     return itemSku.length + ' * ' + itemSku.width + ' * ' + itemSku.height

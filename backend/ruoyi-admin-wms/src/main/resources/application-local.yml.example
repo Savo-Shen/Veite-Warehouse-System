@@ -1,0 +1,11 @@
+# 复制本文件为同目录下的 application-local.yml 并填入真实值。
+# application-local.yml 已被 .gitignore 忽略，不会提交；Spring 启动时通过
+# spring.config.import 自动加载，这里的键与 application-dev.yml 中的 ${...} 占位符对应。
+MYSQL_HOST: localhost
+MYSQL_PORT: 3306
+MYSQL_DATABASE: ry-vue
+MYSQL_USERNAME: your_db_user
+MYSQL_PASSWORD: "your_db_password"
+
+# JWT 秘钥（建议改成随机长字符串：openssl rand -hex 32）
+JWT_SECRET_KEY: please_change_me_to_a_long_random_string

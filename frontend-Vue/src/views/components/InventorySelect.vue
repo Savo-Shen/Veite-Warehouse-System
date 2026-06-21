@@ -198,8 +198,15 @@ const props = defineProps({
   selectedInventory: {
     type: Array,
     default: []
+  },
+  // 最小库存量过滤，传 null 时不过滤（盘库需要包含账面为0的库存）
+  minQuantity: {
+    type: Number,
+    default: 1
   }
 })
+
+query.minQuantity = props.minQuantity
 
 const show = computed(() => {
   return props.modelValue;

@@ -31,7 +31,12 @@ public class Location extends BaseEntity {
      * 编号
      */
     private String locationCode;
-    
+
+    /**
+     * 所属仓库
+     */
+    private Long warehouseId;
+
     /**
      * 备注
      */
