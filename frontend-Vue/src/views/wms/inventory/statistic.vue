@@ -74,10 +74,17 @@
             circle
           />
         </div>
-        <el-checkbox v-model="filterable" label="过滤掉库存为0的商品" size="large" @change="handleChangeFilterZero"/>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <el-button type="success" icon="Download" @click="handleExport">
+            导出Excel{{ selectedRows.length ? `（已选 ${selectedRows.length} 条）` : '' }}
+          </el-button>
+          <el-checkbox v-model="filterable" label="过滤掉库存为0的商品" size="large" @change="handleChangeFilterZero"/>
+        </div>
       </div>
       <el-table :data="inventoryList" border stripe :span-method="spanMethod"
-                cell-class-name="vertical-top-cell" v-loading="loading" empty-text="暂无库存">
+                cell-class-name="vertical-top-cell" v-loading="loading" empty-text="暂无库存"
+                @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="50" align="center"/>
         <template v-if="queryType == 'warehouse'">
           <el-table-column label="仓库" prop="warehouseId">
             <template #default="{ row }">
@@ -117,13 +124,18 @@
                   { label: '暂无位置', type: 'info' }
                 ]"
               />
-              <div v-else>
-                <dict-tag :customTags="[
-                  { label: row.location.locationCode, type: 'primary' }
-                ]"
-                />
-                <div>{{ row.location.locationName }}</div>
-              </div>
+              <el-popover v-else placement="right" trigger="hover" :width="320"
+                          :disabled="!hasShelf(row.location)">
+                <template #reference>
+                  <div style="cursor: default;">
+                    <dict-tag :customTags="[
+                      { label: row.location.locationCode, type: 'primary' }
+                    ]"/>
+                    <div>{{ row.location.locationName }}</div>
+                  </div>
+                </template>
+                <ShelfMap :warehouse-id="shelfLoc(row.location)?.warehouseId" :highlight-id="row.location.id" single/>
+              </el-popover>
             </template>
           </el-table-column>
 
@@ -187,6 +199,13 @@ import {computed, getCurrentInstance, onMounted, onBeforeUnmount, ref} from 'vue
 import {ElForm} from 'element-plus';
 import {getRowspanMethod} from "@/utils/getRowSpanMethod";
 import {useWmsStore} from '@/store/modules/wms'
+import ShelfMap from '@/views/components/ShelfMap.vue'
+import {parseLocationCode} from '@/utils/shelf'
+
+/** 从 store 取该位置的完整信息（用于拿到所属仓库） */
+const shelfLoc = (loc) => loc ? useWmsStore().locationMap.get(loc.id) : null
+/** 位置编码能否解析出货架坐标 */
+const hasShelf = (loc) => !!(loc && parseLocationCode(loc.locationCode))
 
 const {proxy} = getCurrentInstance();
 const spanMethod = computed(() => getRowspanMethod(inventoryList.value, rowSpanArray.value))
@@ -202,6 +221,8 @@ const total = ref(0);
 const rowSpanArray = ref(['itemId', 'skuId','skuIdAndWarehouseId'])
 
 const showCostPrice = ref(false);
+
+const selectedRows = ref([]);
 
 const advancedSearchVisible = ref(false);
 
@@ -242,6 +263,24 @@ const getList = async () => {
   })
   total.value = res.total;
   loading.value = false;
+}
+
+/** 表格勾选变化 */
+const handleSelectionChange = (rows) => {
+  selectedRows.value = rows;
+}
+
+/** 导出Excel：勾选则导出勾选项，否则导出全部搜索结果 */
+const handleExport = () => {
+  const query = { ...queryParams.value }
+  query.minQuantity = filterable.value ? 1 : undefined
+  // 导出无需分页
+  delete query.pageNum
+  delete query.pageSize
+  if (selectedRows.value.length > 0) {
+    query.ids = selectedRows.value.map(it => it.id).join(',')
+  }
+  proxy.download('wms/inventory/export', query, `库存_${new Date().getTime()}.xlsx`)
 }
 
 /** 搜索按钮操作 */
