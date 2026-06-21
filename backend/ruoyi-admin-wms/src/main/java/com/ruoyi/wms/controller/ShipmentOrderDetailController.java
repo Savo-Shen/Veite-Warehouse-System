@@ -13,6 +13,7 @@ import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.common.web.core.BaseController;
 import com.ruoyi.wms.domain.bo.ShipmentOrderDetailBo;
 import com.ruoyi.wms.domain.vo.ShipmentOrderDetailVo;
+import com.ruoyi.wms.domain.vo.SkuLastPriceVo;
 import com.ruoyi.wms.service.ShipmentOrderDetailService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
@@ -115,5 +116,15 @@ public class ShipmentOrderDetailController extends BaseController {
     @GetMapping("/list/{shipmentOrderId}")
     public R<List<ShipmentOrderDetailVo>> listByShipmentOrderId(@NotNull @PathVariable Long shipmentOrderId) {
         return R.ok(shipmentOrderDetailService.queryByShipmentOrderId(shipmentOrderId));
+    }
+
+    /**
+     * 查询客户每个规格最近一次出库的价格
+     */
+    @SaCheckPermission("wms:shipment:all")
+    @GetMapping("/lastPrices")
+    public R<List<SkuLastPriceVo>> lastPrices(@NotNull(message = "客户不能为空") @RequestParam Long merchantId,
+                                              @NotEmpty(message = "规格不能为空") @RequestParam List<Long> skuIds) {
+        return R.ok(shipmentOrderDetailService.queryLastPrices(merchantId, skuIds));
     }
 }

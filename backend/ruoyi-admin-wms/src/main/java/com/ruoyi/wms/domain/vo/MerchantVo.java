@@ -57,10 +57,46 @@ public class MerchantVo implements Serializable {
     private String merchantLevel;
 
     /**
+     * 开户行
+     */
+    @ExcelProperty(value = "开户行")
+    private String bankName;
+
+    /**
+     * 银行账户
+     */
+    @ExcelProperty(value = "银行账户")
+    private String bankAccount;
+
+    /**
+     * 地址
+     */
+    @ExcelProperty(value = "地址")
+    private String address;
+
+    /**
+     * 手机号
+     */
+    @ExcelProperty(value = "手机号")
+    private String mobile;
+
+    /**
+     * 座机号
+     */
+    @ExcelProperty(value = "座机号")
+    private String tel;
+
+    /**
      * 联系人
      */
     @ExcelProperty(value = "联系人")
     private String contactPerson;
+
+    /**
+     * Email
+     */
+    @ExcelProperty(value = "Email")
+    private String email;
 
     /**
      * 备注

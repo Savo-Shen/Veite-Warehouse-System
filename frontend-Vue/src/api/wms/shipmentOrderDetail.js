@@ -50,3 +50,12 @@ export function listByShipmentOrderId(shipmentOrderId) {
     method: 'get'
   })
 }
+
+// 查询客户每个规格最近一次出库的价格
+export function getLastPrices(merchantId, skuIds) {
+  return request({
+    url: '/wms/shipmentOrderDetail/lastPrices',
+    method: 'get',
+    params: { merchantId, skuIds: skuIds.join(',') }
+  })
+}
