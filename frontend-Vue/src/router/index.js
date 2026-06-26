@@ -48,6 +48,13 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/mobile',
+    component: () => import('@/views/mobile/index'),
+    name: 'MobileWarehouse',
+    hidden: true,
+    meta: { title: '手机仓库', noCache: true }
+  },
+  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true

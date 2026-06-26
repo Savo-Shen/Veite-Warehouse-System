@@ -2,6 +2,7 @@ package com.ruoyi.system.controller.system;
 
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.dev33.satoken.annotation.SaMode;
 import cn.hutool.core.util.ObjectUtil;
 import com.ruoyi.common.log.annotation.Log;
 import com.ruoyi.common.web.core.BaseController;
@@ -43,7 +44,7 @@ public class SysOssController extends BaseController {
     /**
      * 查询OSS对象存储列表
      */
-    @SaCheckPermission("system:oss:list")
+    @SaCheckPermission(value = {"system:oss:list", "wms:receipt:all", "wms:shipment:all"}, mode = SaMode.OR)
     @GetMapping("/list")
     public TableDataInfo<SysOssVo> list(@Validated(QueryGroup.class) SysOssBo bo, PageQuery pageQuery) {
         return sysSssService.queryPageList(bo, pageQuery);
@@ -67,7 +68,7 @@ public class SysOssController extends BaseController {
      *
      * @param file 文件
      */
-    @SaCheckPermission("system:oss:upload")
+    @SaCheckPermission(value = {"system:oss:upload", "wms:receipt:all", "wms:shipment:all"}, mode = SaMode.OR)
     @Log(title = "OSS对象存储", businessType = BusinessType.INSERT)
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public R<Map<String, String>> upload(@RequestPart("file") MultipartFile file) {
@@ -98,7 +99,7 @@ public class SysOssController extends BaseController {
      *
      * @param ossIds OSS对象ID串
      */
-    @SaCheckPermission("system:oss:remove")
+    @SaCheckPermission(value = {"system:oss:remove", "wms:receipt:all", "wms:shipment:all"}, mode = SaMode.OR)
     @Log(title = "OSS对象存储", businessType = BusinessType.DELETE)
     @DeleteMapping("/{ossIds}")
     public R<Void> remove(@NotEmpty(message = "主键不能为空")

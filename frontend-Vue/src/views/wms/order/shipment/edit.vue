@@ -77,6 +77,18 @@
               </div>
             </el-col>
           </el-row>
+          <el-row :gutter="24">
+            <el-col :span="24">
+              <el-form-item label="补充图片">
+                <image-upload
+                  v-model="form.supplementImageIds"
+                  :limit="9"
+                  :file-size="10"
+                />
+                <div class="image-help">可上传备货、装车、包装或签收照片，最多 9 张。</div>
+              </el-form-item>
+            </el-col>
+          </el-row>
         </el-form>
       </el-card>
       <el-card header="商品明细" class="mt10">
@@ -110,7 +122,7 @@
               </template>
             </el-popover>
           </div>
-          <el-table :data="form.details" border stripe empty-text="暂无商品明细">
+          <el-table :data="form.details" border stripe empty-text="暂无商品明细" class="desktop-only">
             <el-table-column label="商品信息" prop="itemSku.itemName">
               <template #default="{ row }">
                 <div>{{
@@ -191,6 +203,38 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="mobile-only mobile-edit-list">
+            <div v-for="(row, index) in form.details" :key="row.id || row.skuId" class="mobile-edit-card">
+              <div class="mobile-edit-card__title">
+                <div>
+                  <strong>{{ row.item.itemName }}</strong>
+                  <div>{{ row.itemSku.skuName }}</div>
+                  <small v-if="row.itemSku.barcode">条码：{{ row.itemSku.barcode }}</small>
+                </div>
+                <el-button type="danger" link icon="Delete" @click="handleDeleteDetail(row, index)">删除</el-button>
+              </div>
+              <div class="mobile-edit-fields">
+                <label>
+                  <span>出库数量</span>
+                  <el-input-number v-model="row.quantity" :min="1" :precision="0" @change="handleChangeQuantity" />
+                </label>
+                <label>
+                  <span>单价</span>
+                  <el-input-number v-model="row.itemSku.sellingPrice" :min="0" :precision="2" @change="handleChangeQuantity" />
+                </label>
+              </div>
+              <el-button
+                v-if="lastPriceMap[String(row.skuId)]"
+                link
+                type="primary"
+                @click="applyLastPrice(row)"
+              >
+                使用上次报价 ￥{{ Number(lastPriceMap[String(row.skuId)].price).toFixed(2) }}
+              </el-button>
+              <div class="mobile-edit-total">金额：￥{{ Number(row.amount || 0).toFixed(2) }}</div>
+            </div>
+            <el-empty v-if="!form.details.length" description="请添加需要出库的库存" :image-size="64" />
+          </div>
         </div>
       </el-card>
       <InventorySelect
@@ -243,6 +287,7 @@ const initFormData = {
   totalAmount: undefined,
   orderStatus: 0,
   remark: undefined,
+  supplementImageIds: undefined,
   warehouseId: "1945324849064845313",
   totalQuantity: 0,
   details: [],
@@ -269,6 +314,10 @@ const cancel = async () => {
   close()
 }
 const close = () => {
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    proxy?.$router.push({ path: "/mobile", query: { type: "shipment" } });
+    return
+  }
   const obj = {path: "/shipmentOrder"};
   proxy?.$tab.closeOpenPage(obj);
 }
@@ -364,6 +413,7 @@ const getParamsBeforeSave = (orderStatus) => {
     bizOrderNo: form.value.bizOrderNo,
     orderStatus,
     remark: form.value.remark,
+    supplementImageIds: form.value.supplementImageIds,
     totalAmount: form.value.totalAmount,
     totalQuantity: form.value.totalQuantity,
     warehouseId: form.value.warehouseId,
@@ -546,5 +596,39 @@ const goSaasTip = () => {
 
 .el-statistic__content {
   font-size: 14px;
+}
+
+.image-help {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .receipt-order-edit-wrapper {
+    margin-bottom: 78px !important;
+  }
+
+  .receipt-order-edit-wrapper :deep(.el-col) {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  .footer-global .btn-box {
+    width: 100%;
+    padding: 8px 10px calc(72px + env(safe-area-inset-bottom));
+    gap: 8px;
+    background: #fff;
+    box-shadow: 0 -3px 12px rgba(31, 45, 61, 0.08);
+  }
+
+  .footer-global .btn-box > div {
+    display: flex;
+    gap: 6px;
+  }
+
+  .footer-global .el-button {
+    margin-left: 0 !important;
+  }
 }
 </style>

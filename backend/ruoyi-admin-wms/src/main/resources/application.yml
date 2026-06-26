@@ -102,11 +102,11 @@ spring:
 sa-token:
   # token名称 (同时也是cookie名称)
   token-name: Authorization
-  # token有效期 设为一天 (必定过期) 单位: 秒
-  timeout: 86400
+  # token有效期 90 天；客户端重新打开系统时会主动续期 单位: 秒
+  timeout: 7776000
   # 多端不同 token 有效期 可查看 LoginHelper.loginByDevice 方法自定义
-  # token最低活跃时间 (指定时间无操作就过期) 单位: 秒
-  active-timeout: 86400
+  # token最低活跃时间，连续 30 天未使用则失效 单位: 秒
+  active-timeout: 2592000
   # 允许动态设置 token 有效期
   dynamic-active-timeout: true
   # 是否允许同一账号并发登录 (为true时允许一起登录, 为false时新登录挤掉旧登录)

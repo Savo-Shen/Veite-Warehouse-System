@@ -13,10 +13,22 @@ import {useWmsStore} from '@/store/modules/wms';
 NProgress.configure({ showSpinner: false });
 
 const whiteList = ['/login', '/register'];
+const desktopHomePaths = ['/', '/index', '/dashboard', '/system/dashboard'];
+
+function shouldUseMobileHome(to) {
+  return window.matchMedia('(max-width: 768px)').matches
+    && desktopHomePaths.includes(to.path)
+    && to.query.desktop !== '1'
+}
 
 router.beforeEach((to, from, next) => {
   NProgress.start()
   if (getToken()) {
+    if (shouldUseMobileHome(to)) {
+      next({ path: '/mobile', replace: true })
+      NProgress.done()
+      return
+    }
     to.meta.title && useSettingsStore().setTitle(to.meta.title)
     /* has token*/
     if (to.path === '/login') {
@@ -27,6 +39,8 @@ router.beforeEach((to, from, next) => {
         isRelogin.show = true
         // 判断当前用户是否已拉取完user_info信息
         useUserStore().getInfo().then(() => {
+          // 每次重新打开系统时续期常用设备，续期失败不阻断当前已验证的会话
+          useUserStore().renewSession().catch(() => {})
           isRelogin.show = false
           usePermissionStore().generateRoutes().then(accessRoutes => {
             // 根据roles权限生成可访问的路由表
@@ -35,7 +49,9 @@ router.beforeEach((to, from, next) => {
                 router.addRoute(route) // 动态添加可访问路由表
               }
             })
-            next({ ...to, replace: true }) // hack方法 确保addRoutes已完成
+            next(shouldUseMobileHome(to)
+              ? { path: '/mobile', replace: true }
+              : { ...to, replace: true }) // hack方法 确保addRoutes已完成
           })
         }).catch(err => {
           useUserStore().logOut().then(() => {

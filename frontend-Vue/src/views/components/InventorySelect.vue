@@ -2,7 +2,7 @@
   <el-drawer :model-value="show" title="选择库存" @close="handleCancelClick" :size="size" :close-on-click-modal="false"
              append-to-body>
     <el-form :model="query" ref="queryFormRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter="loadAll">
-      <div style="display: flex;">
+      <div class="selector-search-row">
         <el-form-item label="智能搜索" style="flex: 1;">
           <el-input v-model="query.itemKeywords" clearable placeholder="输入商品或规格名称"/>
         </el-form-item>
@@ -63,7 +63,7 @@
           <div v-if="row.itemSku.barcode">条码：{{ row.itemSku.barcode }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="单价">
+      <el-table-column label="单价" class-name="mobile-hide-column" label-class-name="mobile-hide-column">
         <template #default="{ row }">
           <div v-if="row.itemSku.sellingPrice">{{ row.itemSku.sellingPrice }}</div>
           <div v-else>暂无售价</div>
@@ -294,5 +294,18 @@ onBeforeUnmount(() => {
 .el-statistic__content {
   font-size: 14px;
 }
-</style>
 
+@media (max-width: 768px) {
+  .selector-search-row {
+    display: block;
+  }
+
+  .selector-search-row .el-form-item {
+    margin-right: 0;
+  }
+
+  .mobile-hide-column {
+    display: none !important;
+  }
+}
+</style>

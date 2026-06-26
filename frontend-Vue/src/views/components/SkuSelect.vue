@@ -1,7 +1,7 @@
 <template>
   <el-drawer :model-value="show" title="商品选择" @close="handleCancelClick" :size="size" :close-on-click-modal="false" append-to-body>
     <el-form :model="query" ref="queryFormRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter="loadAll">
-      <div style="display: flex;">
+      <div class="selector-search-row">
         <el-form-item label="智能搜索" style="flex: 1;">
           <el-input v-model="query.itemKeywords" clearable placeholder="输入商品或规格名称"/>
         </el-form-item>
@@ -76,7 +76,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="价格(元)" width="160" align="left">
+      <el-table-column label="价格(元)" width="160" align="left" class-name="mobile-hide-column" label-class-name="mobile-hide-column">
         <template #default="{ row }">
           <div v-if="row.itemSku.costPrice" class="flex-space-between">
             <span>成本价：</span>
@@ -88,7 +88,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="重量(kg)" width="160" align="left">
+      <el-table-column label="重量(kg)" width="160" align="left" class-name="mobile-hide-column" label-class-name="mobile-hide-column">
         <template #default="{ row }">
           <div v-if="row.itemSku.netWeight" class="flex-space-between">
             <span>净重：</span>
@@ -100,7 +100,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="长宽高(cm)" align="right" width="250">
+      <el-table-column label="长宽高(cm)" align="right" width="250" class-name="mobile-hide-column" label-class-name="mobile-hide-column">
         <template #default="{ row }">
           <div>{{ getVolumeText(row) }}</div>
         </template>
@@ -303,5 +303,18 @@ onBeforeUnmount(() => {
 .el-table .my-cell {
   vertical-align: top
 }
-</style>
 
+@media (max-width: 768px) {
+  .selector-search-row {
+    display: block;
+  }
+
+  .selector-search-row .el-form-item {
+    margin-right: 0;
+  }
+
+  .mobile-hide-column {
+    display: none !important;
+  }
+}
+</style>

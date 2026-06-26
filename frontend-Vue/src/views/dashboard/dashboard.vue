@@ -1,194 +1,173 @@
 <template>
-  <div class="board-container">
+  <div class="board-container" :class="{ embedded: !showWhich }" v-loading="loading">
     <div v-if="showWhich" class="back-btn" @click="backHome"><img src="@/assets/images/home.png">返回</div>
     <img v-else src="@/assets/images/fullscreen.png" alt="" class="fullscreen-img" @click="toDataBoard" >
     <div class="time-stamp">{{ nowTime }}</div>
-    <div class="board-title"><span>数据可视化平台</span></div>
+    <div class="board-title"><span>仓库经营数据看板</span></div>
+
     <div class="board-content flex-between">
       <div class="content-left flex-column-between">
-        <div class="content-overview">
+        <section class="panel inventory-overview">
           <div class="box-title">库存总览</div>
-          <div class="box-content flex-between">
-            <div class="overview-object flex-column-center">
-              <div class="object-count">5</div>
-              <div class="object-name">仓库总数</div>
-            </div>
-            <div class="overview-meter flex-column-center">
-              <div class="object-count">981</div>
-              <div class="object-name">库位总数</div>
-            </div>
-            <div class="overview-alarm flex-column-center">
-              <div class="object-count">4</div>
-              <div class="object-name">异常库位</div>
+          <div class="overview-grid">
+            <div v-for="item in overviewCards" :key="item.label" class="overview-card">
+              <strong>{{ item.value }}</strong>
+              <span>{{ item.label }}</span>
             </div>
           </div>
-        </div>
-        <div class="content-status">
-          <div class="box-title">监控设备状态</div>
-          <div class="box-content">
-            <CirclePieChart height="100%" :pieData="pieData"/>
-          </div>
-        </div>
-        <div class="content-alarm">
-          <div class="box-title">报警信息</div>
-          <div class="box-content">
-            <alarmInfo/>
-          </div>
-        </div>
-      </div>
-      <div class="content-middle flex-column-between">
-        <div class="content-map" id="boardMap"></div>
-        <div class="content-chart">
-          <div class="box-title">今日仓库耗能</div>
-          <div class="box-content">
-            <el-tabs
-              v-model="activeName"
-              @tab-click="handleClick"
-              class="trend-tabs"
-            >
-              <el-tab-pane label="综合能耗" name="total">
-                <TrendLineChart
-                  v-if="activeName === 'total'"
-                  :height="'100%'"
-                  :yName="'kgce'"
-                  :xData="xData"
-                  :yData="energyData"
-                />
-              </el-tab-pane>
-              <el-tab-pane label="电" name="electricity">
-                <TrendLineChart
-                  v-if="activeName === 'electricity'"
-                  :height="'100%'"
-                  :yName="'kM·h'"
-                  :xData="xData"
-                  :yData="electricityData"
-                />
-              </el-tab-pane>
-              <el-tab-pane label="水" name="water">
-                <TrendLineChart
-                  v-if="activeName === 'water'"
-                  :height="'100%'"
-                  :yName="'t'"
-                  :xData="xData"
-                  :yData="waterData"
-                />
-              </el-tab-pane>
-            </el-tabs>
-          </div>
-        </div>
-      </div>
-      <div class="content-right flex-column-between">
-        <div class="content-statistics">
-          <div class="box-title">入库统计</div>
-          <div class="box-content flex-between">
-            <div class="statistics-item flex-column-center">
-<!--              <lightning theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">58</div>
-              <div style="text-align: center">待入库</div>
-            </div>
-            <div class="statistics-item flex-column-center">
-<!--              <dashboard theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">10</div>
-              <div style="text-align: center">待质检</div>
-            </div>
-            <div class="statistics-item flex-column-center">
-<!--              <cycle theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">5</div>
-              <div style="text-align: center">待上架</div>
-            </div>
-          </div>
-        </div>
-        <div class="content-statistics">
-          <div class="box-title">出库统计</div>
-          <div class="box-content flex-between">
-            <div class="statistics-item flex-column-center">
-              <!--              <lightning theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">15</div>
-              <div style="text-align: center">待配货</div>
-            </div>
-            <div class="statistics-item flex-column-center">
-              <!--              <dashboard theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">10</div>
-              <div style="text-align: center">待拣货</div>
-            </div>
-            <div class="statistics-item flex-column-center">
-              <!--              <cycle theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">5</div>
-              <div style="text-align: center">待出库</div>
-            </div>
-          </div>
-        </div>
-        <div class="content-statistics">
-          <div class="box-title">其他</div>
-          <div class="box-content flex-between">
-            <div class="statistics-item flex-column-center">
-              <!--              <lightning theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">15</div>
-              <div style="text-align: center">待截单</div>
-            </div>
-            <div class="statistics-item flex-column-center">
-              <!--              <dashboard theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">10</div>
-              <div style="text-align: center">异常单</div>
-            </div>
-            <div class="statistics-item flex-column-center">
-              <!--              <cycle theme="outline" size="25" fill="#00d1ff"/>-->
-              <div class="item-count">5</div>
-              <div style="text-align: center">今日到货</div>
-            </div>
-          </div>
-        </div>
+        </section>
 
-        <div class="content-carbon">
-          <div class="box-title">今日出入库流水</div>
+        <section class="panel">
+          <div class="box-title">库存价值</div>
+          <div class="value-list">
+            <div>
+              <span>按售价估值</span>
+              <strong>{{ money(summary.stockSellingValue) }}</strong>
+            </div>
+            <div>
+              <span>按成本估值</span>
+              <strong>{{ money(summary.stockCostValue) }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel risk-panel">
+          <div class="box-title">需要关注的库存</div>
+          <div class="risk-list">
+            <div v-for="row in lowStockSku" :key="row.skuId" class="risk-row">
+              <div>
+                <strong>{{ row.itemName || '-' }}</strong>
+                <span>{{ row.skuName || '-' }} · {{ row.locationCode || '-' }}</span>
+              </div>
+              <b>{{ integer(row.quantity) }}</b>
+            </div>
+            <el-empty v-if="!lowStockSku.length" description="暂无低库存" :image-size="54" />
+          </div>
+        </section>
+      </div>
+
+      <div class="content-middle flex-column-between">
+        <section class="hero-panel">
+          <div class="hero-main">
+            <small>今日营业额</small>
+            <strong>{{ money(summary.todayTurnover) }}</strong>
+            <span>按今日已完成出库单统计</span>
+          </div>
+          <div class="hero-side">
+            <div>
+              <span>今日出库</span>
+              <strong>{{ integer(summary.todayShipmentOrders) }} 单 / {{ integer(summary.todayShipmentQuantity) }} 件</strong>
+            </div>
+            <div>
+              <span>今日入库</span>
+              <strong>{{ integer(summary.todayReceiptOrders) }} 单 / {{ integer(summary.todayReceiptQuantity) }} 件</strong>
+            </div>
+            <div>
+              <span>今日入库金额</span>
+              <strong>{{ money(summary.todayReceiptAmount) }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel trend-panel">
+          <div class="box-title">近 14 天营业额趋势</div>
           <div class="box-content">
+            <TrendLineChart
+              :height="'100%'"
+              yName="元"
+              :xData="trendX"
+              :yData="turnoverTrend"
+            />
+          </div>
+        </section>
+      </div>
+
+      <div class="content-right flex-column-between">
+        <section class="panel stat-panel">
+          <div class="box-title">待处理单据</div>
+          <div class="stat-grid">
+            <div>
+              <strong>{{ integer(summary.pendingReceiptOrders) }}</strong>
+              <span>待入库单</span>
+            </div>
+            <div>
+              <strong>{{ integer(summary.pendingShipmentOrders) }}</strong>
+              <span>待出库单</span>
+            </div>
+            <div>
+              <strong>{{ integer(summary.lowStockSkuCount) }}</strong>
+              <span>低库存 SKU</span>
+            </div>
+            <div>
+              <strong>{{ integer(summary.emptyStockSkuCount) }}</strong>
+              <span>零库存 SKU</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="box-title">近 14 天出入库件数</div>
+          <div class="mini-chart">
             <barChart
               :height="'100%'"
               :barColor="['#1c508e', '#1be5e7']"
-              :yName="'件'"
-              :xData="xData"
-              :yData="carbonData"
+              yName="件"
+              :xData="trendX"
+              :yData="shipmentQuantityTrend"
             />
           </div>
-        </div>
+        </section>
+
+        <section class="panel top-panel">
+          <div class="box-title">近 30 天出库 TOP</div>
+          <div class="top-list">
+            <div v-for="(row, index) in topShipmentSku" :key="row.skuId" class="top-row">
+              <i>{{ index + 1 }}</i>
+              <div>
+                <strong>{{ row.itemName || '-' }}</strong>
+                <span>{{ row.skuName || '-' }}</span>
+              </div>
+              <b>{{ integer(row.quantity) }}</b>
+            </div>
+            <el-empty v-if="!topShipmentSku.length" description="暂无出库数据" :image-size="54" />
+          </div>
+        </section>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import CirclePieChart from './components/dashboard/CirclePieChart.vue'
-import alarmInfo from './components/dashboard/alarmInfo.vue'
-import LineChart from './components/dashboard/LineChart.vue'
-import barChart from './components/dashboard/BarChart.vue'
 import TrendLineChart from './components/dashboard/TrendLineChart.vue'
+import barChart from './components/dashboard/BarChart.vue'
 import moment from 'moment'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getDashboardOverview } from '@/api/wms/dashboard'
 
-const map = ref()
-const showWhich = computed(()=>{
-  return router.currentRoute.value.path === '/system/dashboard'
-})
-const activeName = ref('total')
+const router = useRouter()
+const loading = ref(false)
 const nowTime = ref()
-const timer = ref()  //定时任务
-const pieData = ref([])
-const deviceTotal = ref(0)
-const alarmTotal = ref(0)
-const energyType = ref('0')
-const areaId = ref(1)
-const xData = ref([])
-const electricityData = ref([])
-const waterData = ref([])
-const energyData = ref([])
-const carbonData = ref([])
-const electricityTotal = ref(0)
-const powerTotal = ref(0)
-const carbonTotal = ref(0)
-const dailyP = ref({})
+const timer = ref()
+const summary = ref({})
+const dailyTrend = ref([])
+const warehouseStock = ref([])
+const topShipmentSku = ref([])
+const lowStockSku = ref([])
 
-const router = useRouter();
+const showWhich = computed(() => router.currentRoute.value.path === '/system/dashboard')
+const trendX = computed(() => dailyTrend.value.map(item => moment(item.day).format('MM-DD')))
+const turnoverTrend = computed(() => dailyTrend.value.map(item => Number(item.turnover || 0).toFixed(2)))
+const shipmentQuantityTrend = computed(() => dailyTrend.value.map(item => Number(item.shipmentQuantity || 0).toFixed(0)))
+const overviewCards = computed(() => [
+  { label: '仓库数', value: integer(summary.value.warehouseCount) },
+  { label: '库位数', value: integer(summary.value.locationCount) },
+  { label: '商品数', value: integer(summary.value.itemCount) },
+  { label: 'SKU 数', value: integer(summary.value.skuCount) },
+  { label: '库存件数', value: integer(summary.value.totalStockQuantity) },
+  { label: '低库存', value: integer(summary.value.lowStockSkuCount) }
+])
+
 function toDataBoard() {
   router.push('/system/dashboard')
 }
@@ -197,571 +176,100 @@ function backHome() {
   router.push('/dashboard')
 }
 
-function getEquipmentData() {
-  const res = [
-    {
-      'id': null,
-      'name': null,
-      'sn': null,
-      'model': null,
-      'description': null,
-      'img': null,
-      'qrCode': null,
-      'factory': null,
-      'type': null,
-      'status': '0',
-      'count': 10,
-      'proportion': '71.43%',
-      'imgOss': null,
-      'areaName': null
-    },
-    {
-      'id': null,
-      'name': null,
-      'sn': null,
-      'model': null,
-      'description': null,
-      'img': null,
-      'qrCode': null,
-      'factory': null,
-      'type': null,
-      'status': '1',
-      'count': 1,
-      'proportion': '7.14%',
-      'imgOss': null,
-      'areaName': null
-    },
-    {
-      'id': null,
-      'name': null,
-      'sn': null,
-      'model': null,
-      'description': null,
-      'img': null,
-      'qrCode': null,
-      'factory': null,
-      'type': null,
-      'status': '2',
-      'count': 3,
-      'proportion': '21.43%',
-      'imgOss': null,
-      'areaName': null
-    }
-  ]
-  pieData.value = [
-    { value: res[0].count, name: '正常', itemStyle: { color: '#6be6c3' } },
-    { value: res[1].count, name: '报警', itemStyle: { color: '#e0c464' } },
-    { value: res[2].count, name: '离线', itemStyle: { color: '#297ef8' } }
-  ]
-  res.forEach(item => {
-    deviceTotal.value = item.count + deviceTotal.value
-  })
-}
-
-/** 查询历史报警列表 */
-function getAlarmList() {
-  alarmTotal.value = 4
-}
-
-// 获取区域拓扑
-function getAreaList() {
-  const res = [
-    {
-      'id': 1,
-      'parentId': 0,
-      'label': '科研楼',
-      'weight': 0,
-      'children': [
-        {
-          'id': '1646408966204309506',
-          'parentId': 1,
-          'label': '一层',
-          'weight': 31,
-          'children': [
-            {
-              'id': '1646408966204309505',
-              'parentId': '1646408966204309506',
-              'label': '101',
-              'weight': 1
-            },
-            {
-              'id': '1646422704076713985',
-              'parentId': '1646408966204309506',
-              'label': '102',
-              'weight': 2
-            },
-            {
-              'id': '1717771706262138881',
-              'parentId': '1646408966204309506',
-              'label': '103',
-              'weight': 3
-            }
-          ]
-        },
-        {
-          'id': '1648325981443239938',
-          'parentId': 1,
-          'label': '二层',
-          'weight': 32,
-          'children': [
-            {
-              'id': '1648326036518645761',
-              'parentId': '1648325981443239938',
-              'label': '201',
-              'weight': 1
-            },
-            {
-              'id': '1648326088922279937',
-              'parentId': '1648325981443239938',
-              'label': '202',
-              'weight': 2
-            },
-            {
-              'id': '1717771752927965186',
-              'parentId': '1648325981443239938',
-              'label': '203',
-              'weight': 3
-            },
-            {
-              'id': '1717771794132807682',
-              'parentId': '1648325981443239938',
-              'label': '204',
-              'weight': 4
-            }
-          ]
-        }
-      ]
-    },
-    {
-      'id': 3454657657688,
-      'parentId': 0,
-      'label': '能源分项',
-      'weight': 0,
-      'children': [
-        {
-          'id': '1698583616605478914',
-          'parentId': 3454657657688,
-          'label': '电',
-          'weight': 0,
-          'children': [
-            {
-              'id': '1698584115568271361',
-              'parentId': '1698583616605478914',
-              'label': '插座用电',
-              'weight': 0
-            },
-            {
-              'id': '1698584207037652993',
-              'parentId': '1698583616605478914',
-              'label': '空调用电',
-              'weight': 1
-            },
-            {
-              'id': '1698585341307478017',
-              'parentId': '1698583616605478914',
-              'label': '照明用电',
-              'weight': 2
-            },
-            {
-              'id': '1698585419581579266',
-              'parentId': '1698583616605478914',
-              'label': '特殊用电',
-              'weight': 3
-            }
-          ]
-        },
-        {
-          'id': '1698583808511664130',
-          'parentId': 3454657657688,
-          'label': '水',
-          'weight': 1
-        }
-      ]
-    }
-  ]
-  areaId.value = res[0].id
-}
-
-//根据能源类型查询
-function getEnergyType() {
-  let date = moment().format('yyyy-MM-DD HH:mm:ss')
-  xData.value = []
-  electricityData.value = []
-  waterData.value = []
-  let data = {
-    energyType: energyType.value,
-    areaId: areaId.value,
-    nowTime: date
-  }
-  let res = []
-  if (energyType.value == 0) {
-    res = [
-      '18.61',
-      '21.70',
-      '22.30',
-      '18.20',
-      '26.80',
-      '21.70',
-      '15.49',
-      '18.60',
-      '25.40',
-      '20.50',
-      '23.00',
-      '26.41',
-      '23.40',
-      '16.00',
-      '21.40',
-      '--'
-    ]
-  } else if (energyType.value == 1) {
-    res = [
-      '1.09',
-      '1.15',
-      '0.99',
-      '1.11',
-      '1.16',
-      '1.19',
-      '1.08',
-      '1.14',
-      '1.00',
-      '1.12',
-      '1.13',
-      '0.99',
-      '1.12',
-      '0.79',
-      '1.10',
-      '--'
-    ]
-  }
-  if (res.length <= 0) {
-    xData.value = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
-    return
-  }
-  res.forEach((item, index) => {
-    xData.value.push(index)
-  })
-  if (energyType.value == 0) {
-    electricityData.value = res
-  } else if (energyType.value == 1) {
-    waterData.value = res
-  }
-}
-
-// 获取总能耗
-function getConsumption() {
-  const res = {
-    'electricity': '319.51',
-    'kgce': '46.97',
-    'kg': '265.52'
-  }
-  electricityTotal.value = res.electricity
-  powerTotal.value = res.kgce
-  carbonTotal.value = res.kg
-
-}
-
-//综合能耗
-function getEnergy() {
-  let date = moment().format('yyyy-MM-DD HH:mm:ss')
-  xData.value = []
-  energyData.value = []
-  carbonData.value = []
-  electricityData.value = []
-  waterData.value = []
-  let data = {
-    energyType: '0',
-    areaId: areaId.value,
-    nowTime: date
-  }
-  const res = [
-    '18.61',
-    '21.70',
-    '22.30',
-    '18.20',
-    '26.80',
-    '21.70',
-    '15.49',
-    '18.60',
-    '25.40',
-    '20.50',
-    '23.00',
-    '26.41',
-    '23.40',
-    '16.00',
-    '21.40',
-    '9.40'
-  ]
-  if (res.length <= 0) {
-    xData.value = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
-    return
-  }
-  res.forEach((item, index) => {
-    xData.value.push(index)
-  })
-  electricityData.value = res
-  let query = {
-    energyType: '1',
-    areaId: areaId.value,
-    nowTime: date
-  }
-  const request = [
-    '1.09',
-    '1.15',
-    '0.99',
-    '1.11',
-    '1.16',
-    '1.19',
-    '1.08',
-    '1.14',
-    '1.00',
-    '1.12',
-    '1.13',
-    '0.99',
-    '1.12',
-    '0.79',
-    '1.10',
-    '0.30'
-  ]
-  waterData.value = request
-  xData.value.forEach((item, index) => {
-    energyData.value.push((parseFloat(electricityData.value[index]) / 8.167 + parseFloat(waterData.value[index]) * 0.4857).toFixed(2))
-    carbonData.value.push((parseFloat(electricityData.value[index]) * 0.785 + parseFloat(waterData.value[index]) * 0.91).toFixed(2))
-  })
-}
-
-// 获取当日-昨日电功率曲线
-function getDailyPData() {
-  let param = {
-    areaId: areaId.value,
-    energyType: '0'
-  }
-  const res = {
-    'todayData': [
-      '2815.90',
-      '2882.20',
-      '2981.20',
-      '2993.20',
-      '2752.70',
-      '2995.30',
-      '2982.00',
-      '2947.30',
-      '2995.80',
-      '2897.10',
-      '2555.60',
-      '2693.90',
-      '2907.60',
-      '2812.70',
-      '2621.80',
-      '2838.80'
-    ],
-    'yesterdayData': [
-      '2863.40',
-      '2962.80',
-      '2651.20',
-      '2939.00',
-      '2520.30',
-      '2992.60',
-      '2793.20',
-      '2927.30',
-      '2933.40',
-      '2695.40',
-      '2916.00',
-      '2755.60',
-      '2439.30',
-      '2793.10',
-      '2990.00',
-      '2677.70',
-      '2748.30',
-      '2588.80',
-      '2848.50',
-      '2751.60',
-      '2965.90',
-      '2978.20',
-      '2945.60',
-      '2931.20'
-    ],
-    'yesterdayMax': {
-      'createBy': null,
-      'createTime': '2024-09-28 05:05:02',
-      'updateBy': null,
-      'updateTime': '2024-09-28 05:55:02',
-      'id': '1839773264591237125',
-      'equipmentSn': '47HO3C3UCS',
-      'energyType': '0',
-      'time': '2024-09-28 05:00:00',
-      'min': '131.70',
-      'max': '2992.60',
-      'ave': '1555.73'
-    },
-    'todayMax': {
-      'createBy': null,
-      'createTime': '2024-09-29 08:05:02',
-      'updateBy': null,
-      'updateTime': '2024-09-29 08:55:02',
-      'id': '1840180950864539650',
-      'equipmentSn': 'S5N5D8L9PE',
-      'energyType': '0',
-      'time': '2024-09-29 08:00:00',
-      'min': '223.70',
-      'max': '2995.80',
-      'ave': '1183.52'
-    }
-  }
-  let result = {
-    todayData: res.todayData,
-    yesterdayData: res.yesterdayData
-  }
-  dailyP.value = result
-}
-
-function initMap() {
-  // 未加载百度地图 SDK 时直接跳过，避免报错
-  if (typeof BMapGL === 'undefined') {
-    return
-  }
-  map.value = new BMapGL.Map('boardMap')
-  // map.value.addEventListener('click', function (e) {
-  //   console.log('点击位置坐标：', e.latlng.lng, e.latlng.lat)
-  // })
-  let myIcon = new BMapGL.Icon(
-    'https://szcloudpulse.com:9000/cp-portal/2023/04/27/d85f358bb44a4cf69e843acecf7b0c2c.png',
-    new BMapGL.Size(23, 25),
-    {
-      // 指定定位位置。
-      // 当标注显示在地图上时，其所指向的地理位置距离图标左上
-      // 角各偏移10像素和25像素。您可以看到在本例中该位置即是
-      // 图标中央下端的尖角位置。
-      // anchor: new BMapGL.Size(15, 25),
-      // 设置图片偏移。
-      // 当您需要从一幅较大的图片中截取某部分作为标注图标时，您
-      // 需要指定大图的偏移位置，此做法与css sprites技术类似。
-      // imageOffset: new BMapGL.Size(0, 0 - 25)   // 设置图片偏移
-    }
-  )
-
-  // 设置中心点坐标和放大倍数
-  // 以 经纬度 定位
-  let point = new BMapGL.Point(118.59362783739695, 24.903409594508428)
-  // let point2 = new BMapGL.Point(120.679607, 31.529649)
-  map.value.centerAndZoom(point, 14)
-
-  //设置地图样式
-  map.value.setMapStyleV2({ styleId: 'd9955f6e8bd01669bfd15a998f109283' })
-  // 以 地名 定位
-  // map.value.centerAndZoom('苏州市', 12);
-
-  map.value.enableScrollWheelZoom() //启用滚轮放大缩小，默认禁用
-  map.value.enableContinuousZoom() //启用地图惯性拖拽，默认禁用
-
-  // 标注
-  let marker = new BMapGL.Marker(point, { icon: myIcon })
-  map.value.addOverlay(marker)
-  // 信息窗口
-  let opts = {
-    width: 250,
-    height: 100,
-    title: '武珞科技园'
-  }
-  // let infoWindow = new BMapGL.InfoWindow("云脉软件", opts);
-  // marker.addEventListener("mouseover", function () {
-  //   openInfoWindow(infoWindow);
-  // });
-  // // 鼠标移开标注点要发生的事
-  // marker.addEventListener("mouseout", function () {
-  //   closeInfoWindow(infoWindow);
-  // });
-
-  // let point2 = new BMapGL.Point(120.679607, 31.529649)
-  // let marker2 = new BMapGL.Marker(point2, { icon: myIcon })
-  // map.value.addOverlay(marker2)
-  // let opts2 = {
-  //   width: 250,
-  //   height: 100,
-  //   title: '优胜美地生产基地'
-  // }
-  // let infoWindow2 = new BMapGL.InfoWindow("优胜美地", opts2);
-  // marker2.addEventListener("mouseover", function () {
-  //   openInfoWindow(infoWindow2);
-  // });
-  // // 鼠标移开标注点要发生的事
-  // marker2.addEventListener("mouseout", function () {
-  //   closeInfoWindow(infoWindow2);
-  // });
-}
-
-function handleClick(tab, event) {
-  if (tab.index == '0') {
-    getEnergy()
-  } else if (tab.index == '1') {
-    energyType.value = '0'
-    getEnergyType()
-  } else if (tab.index == '2') {
-    energyType.value = '1'
-    getEnergyType()
-  }
-}
-
 function getNowTime() {
-  nowTime.value = moment().format('yyyy-MM-DD HH:mm:ss')
+  nowTime.value = moment().format('YYYY-MM-DD HH:mm:ss')
 }
 
-onMounted((() => {
-  if (timer.value) {
-    clearInterval(timer.value)
-  }
-  timer.value = setInterval(getNowTime, 1000)
+function money(value) {
+  const amount = Number(value || 0)
+  return `￥${amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 
-  getEquipmentData()
-  getAlarmList()
-  getAreaList()
-  nextTick((() => {
-    initMap()
-    getConsumption()
-    getEnergy()
-    getDailyPData()
-  }))
-}))
+function integer(value) {
+  return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+}
+
+function fillTrend(rows) {
+  const map = new Map((rows || []).map(item => [moment(item.day).format('YYYY-MM-DD'), item]))
+  const days = []
+  for (let i = 13; i >= 0; i--) {
+    const day = moment().subtract(i, 'days').format('YYYY-MM-DD')
+    days.push({
+      day,
+      receiptOrders: 0,
+      shipmentOrders: 0,
+      receiptQuantity: 0,
+      shipmentQuantity: 0,
+      receiptAmount: 0,
+      turnover: 0,
+      ...(map.get(day) || {})
+    })
+  }
+  return days
+}
+
+async function loadDashboard() {
+  loading.value = true
+  try {
+    const res = await getDashboardOverview()
+    const data = res.data || {}
+    summary.value = data.summary || {}
+    dailyTrend.value = fillTrend(data.dailyTrend || [])
+    warehouseStock.value = data.warehouseStock || []
+    topShipmentSku.value = data.topShipmentSku || []
+    lowStockSku.value = data.lowStockSku || []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  getNowTime()
+  timer.value = setInterval(getNowTime, 1000)
+  loadDashboard()
+})
 
 onBeforeUnmount(() => {
   clearInterval(timer.value)
-  map.value = null
 })
-
 </script>
 
 <style scoped>
 .board-container {
+  position: relative;
   width: 100%;
   height: 100vh;
+  min-height: 100vh;
+  color: #fff;
   background-image: url("../../assets/images/board-bg.png");
   background-size: 100% 100%;
-  color: #fff;
-  position: relative;
+  overflow: hidden;
 }
 
-.back-btn {
-  position: absolute;
-  left: 2.5%;
-  top: 5%;
-  height: 3%;
-  color: #00d0ff;
-  font-size: 17px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
+.board-container.embedded {
+  height: calc(100vh - 84px);
+  min-height: calc(100vh - 84px);
 }
 
-.back-btn img {
-  height: 100%;
-  margin-right: 6px;
-}
-
+.back-btn,
 .fullscreen-img {
   position: absolute;
   left: 2.5%;
   top: 5%;
   height: 3%;
   cursor: pointer;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  color: #00d0ff;
+  font-size: 17px;
+}
+
+.back-btn img {
+  height: 100%;
+  margin-right: 6px;
 }
 
 .time-stamp {
@@ -773,191 +281,271 @@ onBeforeUnmount(() => {
 }
 
 .board-title {
-  background-image: linear-gradient(to top, #2571e9, #00e7ff);
-  background-clip: text;
-  -webkit-background-clip: text;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 9%;
   color: transparent;
   font-size: 40px;
   font-weight: bold;
   letter-spacing: 8px;
-  height: 9%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-image: linear-gradient(to top, #2571e9, #00e7ff);
+  background-clip: text;
+  -webkit-background-clip: text;
 }
 
 .board-content {
-  height: 86%;
   width: 95%;
+  height: calc(100% - 10%);
   margin: 6px auto 0;
+  gap: 12px;
 }
 
-.content-left {
-  width: calc(25% - 12px);
-  margin-right: 12px;
+.flex-column-between {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-.content-overview,
-.content-status,
-.content-alarm,
-.content-statistics,
-.content-trend,
-.content-carbon,
-.content-chart {
+.content-left,
+.content-right {
+  width: 25%;
+}
+
+.content-middle {
+  width: 50%;
+}
+
+.panel,
+.hero-panel {
   background-image: url("../../assets/images/box-bg1.png");
   background-size: 100% 100%;
 }
 
-.content-overview {
-  height: 20%;
-  margin-bottom: 12px;
-  padding: 12px 16px;
+.panel {
+  padding: 16px;
+}
+
+.content-left .panel:nth-child(1) { height: 28%; }
+.content-left .panel:nth-child(2) { height: calc(22% - 12px); }
+.content-left .panel:nth-child(3) { height: calc(50% - 12px); }
+.content-right .panel:nth-child(1) { height: 25%; }
+.content-right .panel:nth-child(2) { height: calc(32% - 12px); }
+.content-right .panel:nth-child(3) { height: calc(43% - 12px); }
+
+.hero-panel {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 18px;
+  height: 34%;
+  padding: 28px 34px;
+}
+
+.trend-panel {
+  height: calc(66% - 12px);
+  padding: 18px 30px;
 }
 
 .box-title {
-  height: 20px;
-  margin-left: 12px;
   display: flex;
   align-items: center;
+  height: 20px;
+  margin-left: 4px;
   color: #01d1ff;
 }
 
 .box-title::before {
   content: " ";
+  display: inline-block;
   width: 6px;
   height: 100%;
-  border-radius: 10px;
-  display: inline-block;
   margin-right: 6px;
+  border-radius: 10px;
   background: linear-gradient(to bottom, #00d1ff, #2869e8);
 }
 
 .box-content {
   height: calc(100% - 20px);
   overflow: hidden;
-  padding: 20px 10px;
+  padding-top: 12px;
 }
 
-.overview-object,
-.overview-meter,
-.overview-alarm {
-  width: calc(33% - 10px);
-  align-items: center;
-  text-align: center;
+.overview-grid,
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  height: calc(100% - 28px);
+  padding-top: 10px;
 }
 
-.object-count {
+.overview-card,
+.stat-grid div,
+.value-list div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 8px;
+  background: rgba(0, 209, 255, .08);
+  border: 1px solid rgba(0, 209, 255, .16);
+  border-radius: 12px;
+}
+
+.overview-card strong,
+.stat-grid strong {
   color: #1be5e7;
-  font-size: 35px;
-  font-weight: bold;
-  margin-bottom: 6px;
+  font-size: 23px;
+  line-height: 1.1;
 }
 
-.object-name {
+.overview-card span,
+.stat-grid span,
+.value-list span,
+.hero-main span,
+.hero-side span,
+.risk-row span,
+.top-row span {
+  color: rgba(255, 255, 255, .72);
   font-size: 12px;
 }
 
-.content-status {
-  height: calc(40% - 12px);
-  margin-bottom: 12px;
-  padding: 20px 16px;
+.value-list {
+  display: grid;
+  gap: 8px;
+  height: calc(100% - 28px);
+  padding-top: 10px;
 }
 
-.content-alarm {
-  height: calc(40% - 12px);
-  padding: 16px 16px;
+.value-list strong {
+  margin-top: 3px;
+  color: #ffd166;
+  font-size: 21px;
 }
 
-.content-middle {
-  width: 50%;
-  margin-right: 12px;
+.hero-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.content-map {
-  height: 65%;
+.hero-main small {
+  color: #00d1ff;
+  font-size: 18px;
+  font-weight: 700;
 }
 
-.content-chart {
-  height: calc(35% - 12px);
-  padding: 18px 30px;
-}
-
-.content-right {
-  width: calc(25% - 12px);
-}
-
-.content-statistics {
-  height: 20%;
-  padding: 12px 16px;
-}
-
-.content-trend {
-  height: calc(40% - 12px);
-  padding: 18px 16px;
-}
-
-.content-carbon {
-  height: calc(40% - 12px);
-  padding: 18px 16px;
-}
-
-.statistics-item {
-  width: calc(33% - 8px);
-  align-items: center;
-  font-size: 12px;
-}
-
-.item-count {
-  text-align: center;
-  font-size: 28px;
-  font-weight: bold;
+.hero-main strong {
+  margin: 12px 0;
   color: #1be5e7;
-  margin: 6px 0 6px;
+  font-size: 58px;
+  line-height: 1;
 }
 
-.trend-tabs {
-  height: 100%;
-}
-</style>
-<style>
-.trend-tabs,
-.trend-tabs .el-tabs__content .el-tab-pane {
-  height: 100%;
+.hero-side {
+  display: grid;
+  gap: 12px;
 }
 
-.trend-tabs .el-tabs__item {
+.hero-side div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 14px 18px;
+  background: rgba(41, 126, 248, .12);
+  border: 1px solid rgba(41, 126, 248, .22);
+  border-radius: 14px;
+}
+
+.hero-side strong {
+  margin-top: 6px;
   color: #fff;
+  font-size: 20px;
 }
 
-.trend-tabs .el-tabs__item:hover,
-.trend-tabs .el-tabs__item.is-active {
-  color: #00d0fe;
+.risk-list,
+.top-list {
+  height: calc(100% - 28px);
+  padding-top: 12px;
+  overflow: auto;
 }
 
-.trend-tabs .el-tabs__active-bar {
-  background-color: #00d0fe;
+.risk-row,
+.top-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
 
-.trend-tabs .el-tabs__nav-wrap::after {
-  background-color: #1d3666;
+.risk-row div,
+.top-row div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
 }
 
-.trend-tabs .el-tabs__content {
-  height: calc(100% - 55px);
+.risk-row strong,
+.top-row strong {
+  overflow: hidden;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 地图信息窗口样式修改 */
-#boardMap .BMap_bubble_pop {
-  background-color: rgba(28, 37, 80, 0.8) !important;
-  border: 1px solid #186dbf !important;
+.risk-row b {
+  min-width: 42px;
+  color: #ff9f43;
+  font-size: 22px;
+  text-align: right;
 }
 
-#boardMap .BMap_bubble_pop img {
-  display: none;
+.top-row i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #041b3c;
+  font-style: normal;
+  font-weight: 800;
+  background: #1be5e7;
+  border-radius: 50%;
 }
 
-#boardMap .BMap_bubble_pop .BMap_bubble_top .BMap_bubble_title,
-#boardMap .BMap_bubble_pop .BMap_bubble_center .BMap_bubble_content {
-  color: #fff !important;
+.top-row b {
+  color: #ffd166;
+  font-size: 20px;
+}
+
+.mini-chart {
+  height: calc(100% - 24px);
+  padding-top: 10px;
+}
+
+@media (max-width: 1200px) {
+  .board-container {
+    overflow: auto;
+  }
+
+  .board-content {
+    display: block;
+    height: auto;
+  }
+
+  .content-left,
+  .content-middle,
+  .content-right {
+    width: 100%;
+  }
+
+  .panel,
+  .hero-panel,
+  .trend-panel {
+    min-height: 280px;
+    margin-bottom: 12px;
+  }
 }
 </style>

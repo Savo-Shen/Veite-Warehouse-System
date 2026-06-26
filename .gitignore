@@ -11,3 +11,6 @@ application-local.yml
 # 本地工具缓存
 .playwright-cli/
 .pnpm-store/
+
+# 数据库备份/恢复转储（体积大，含真实数据，切勿提交）
+recovery/

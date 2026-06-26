@@ -31,6 +31,10 @@ public class LoginHelper {
 
     public static final String LOGIN_USER_KEY = "loginUser";
     public static final String USER_KEY = "userId";
+    /**
+     * 常用设备登录有效期：90 天。
+     */
+    public static final long REMEMBER_DEVICE_TIMEOUT = 90L * 24 * 60 * 60;
 
     /**
      * 登录系统
@@ -150,5 +154,14 @@ public class LoginHelper {
 
     public static boolean isLogin() {
         return getLoginUser() != null;
+    }
+
+    /**
+     * 续期当前常用设备的登录状态。
+     */
+    public static long renewRememberDevice() {
+        StpUtil.renewTimeout(REMEMBER_DEVICE_TIMEOUT);
+        StpUtil.updateLastActiveToNow();
+        return REMEMBER_DEVICE_TIMEOUT;
     }
 }
