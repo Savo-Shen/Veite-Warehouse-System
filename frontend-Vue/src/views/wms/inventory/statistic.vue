@@ -11,8 +11,8 @@
             </el-radio-group>
           </el-form-item>
 
-          <el-form-item label="智能搜索" style="flex: 1; margin-left: -100px;">
-            <el-input v-model="queryParams.itemKeywords" clearable placeholder="输入商品或规格名称"  />
+          <el-form-item label="综合搜索" style="flex: 1; margin-left: -100px;">
+            <el-input v-model="queryParams.itemKeywords" clearable placeholder="商品/规格名称、编号、条码或位置编码（多个关键字用空格分隔）"  />
           </el-form-item>
 
           <el-form-item class="col4">
@@ -76,7 +76,10 @@
         </div>
         <div style="display: flex; align-items: center; gap: 12px;">
           <el-button type="success" icon="Download" @click="handleExport">
-            导出Excel{{ selectedRows.length ? `（已选 ${selectedRows.length} 条）` : '' }}
+            {{ selectedRows.length ? `导出已选（${selectedRows.length} 条）` : `导出当前页（${ inventoryList.length } 条）` }}
+          </el-button>
+          <el-button v-if="hasSearchCondition" type="warning" plain icon="Download" @click="handleExportAllSearch">
+            导出所有搜索结果（{{ total }} 条）
           </el-button>
           <el-checkbox v-model="filterable" label="过滤掉库存为0的商品" size="large" @change="handleChangeFilterZero"/>
         </div>
@@ -196,7 +199,7 @@ import {
   listInventoryBoard
 } from '@/api/wms/inventory';
 import {computed, getCurrentInstance, onMounted, onBeforeUnmount, ref} from 'vue';
-import {ElForm} from 'element-plus';
+import {ElForm, ElMessage, ElMessageBox} from 'element-plus';
 import {getRowspanMethod} from "@/utils/getRowSpanMethod";
 import {useWmsStore} from '@/store/modules/wms'
 import ShelfMap from '@/views/components/ShelfMap.vue'
@@ -219,12 +222,14 @@ const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
 const rowSpanArray = ref(['itemId', 'skuId','skuIdAndWarehouseId'])
+const EXPORT_WARNING_THRESHOLD = 1000
 
 const showCostPrice = ref(false);
 
 const selectedRows = ref([]);
 
 const advancedSearchVisible = ref(false);
+const searchedCondition = ref(null);
 
 const filterable = ref(false)
 const queryType = ref("item")
@@ -241,6 +246,21 @@ const queryParams = ref({
   minQuantity: undefined,
   itemKeywords: undefined, // 新增关键字搜索
 })
+
+const hasSearchCondition = computed(() => {
+  return searchedCondition.value?.hasCondition === true
+})
+
+const detectSearchCondition = (params, filterZero) => {
+  return Boolean(filterZero)
+    || Boolean(String(params.itemKeywords || '').trim())
+    || Boolean(params.warehouseId)
+    || Boolean(String(params.itemName || '').trim())
+    || Boolean(String(params.itemCode || '').trim())
+    || Boolean(String(params.skuName || '').trim())
+    || Boolean(String(params.skuCode || '').trim())
+    || Boolean(params.itemLocationId)
+}
 
 /** 查询库存列表 */
 const getList = async () => {
@@ -270,28 +290,64 @@ const handleSelectionChange = (rows) => {
   selectedRows.value = rows;
 }
 
-/** 导出Excel：勾选则导出勾选项，否则导出全部搜索结果 */
-const handleExport = () => {
-  const query = { ...queryParams.value }
-  query.minQuantity = filterable.value ? 1 : undefined
+const buildExportQuery = (params = queryParams.value, filterZero = filterable.value) => {
+  const query = { ...params }
+  query.minQuantity = filterZero ? 1 : undefined
   // 导出无需分页
   delete query.pageNum
   delete query.pageSize
+  return query
+}
+
+/** 导出Excel：勾选则导出勾选项，否则导出当前页 */
+const handleExport = () => {
+  const query = buildExportQuery()
   if (selectedRows.value.length > 0) {
     query.ids = selectedRows.value.map(it => it.id).join(',')
+  } else {
+    if (!inventoryList.value.length) {
+      ElMessage.warning('当前页没有可导出的库存数据')
+      return
+    }
+    query.ids = inventoryList.value.map(it => it.id).join(',')
   }
   proxy.download('wms/inventory/export', query, `库存_${new Date().getTime()}.xlsx`)
+}
+
+/** 导出所有搜索结果：按搜索条件导出，不受当前页和勾选限制 */
+const handleExportAllSearch = async () => {
+  const query = buildExportQuery(searchedCondition.value?.params || queryParams.value, searchedCondition.value?.filterable ?? filterable.value)
+  if (Number(total.value || 0) > EXPORT_WARNING_THRESHOLD) {
+    await ElMessageBox.confirm(
+      `当前搜索结果共有 ${total.value} 条，导出可能会比较慢，确定继续导出全部搜索结果吗？`,
+      '导出数量较多',
+      {
+        confirmButtonText: '继续导出',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  }
+  proxy.download('wms/inventory/export', query, `库存_搜索结果_${new Date().getTime()}.xlsx`)
 }
 
 /** 搜索按钮操作 */
 const handleQuery = () => {
   queryParams.value.pageNum = 1;
+  searchedCondition.value = {
+    hasCondition: detectSearchCondition(queryParams.value, filterable.value),
+    params: { ...queryParams.value },
+    filterable: filterable.value
+  }
   getList();
 }
 
 /** 重置按钮操作 */
 const resetQuery = () => {
   proxy.resetForm("queryRef");
+  // 综合搜索输入框无 prop，resetForm 不会清空，需手动重置
+  queryParams.value.itemKeywords = undefined;
+  searchedCondition.value = null;
   handleQuery();
 }
 const calcSubtotal = (row) => {
@@ -310,11 +366,17 @@ const handleSortTypeChange = (e) => {
     rowSpanArray.value = ['itemId', 'skuId','skuIdAndWarehouseId']
   }
   queryParams.value.pageNum = 1;
+  searchedCondition.value = null;
   getList()
 }
 
 const handleChangeFilterZero = (e) => {
   queryParams.value.pageNum = 1;
+  searchedCondition.value = {
+    hasCondition: detectSearchCondition(queryParams.value, filterable.value),
+    params: { ...queryParams.value },
+    filterable: filterable.value
+  }
   getList()
 }
 

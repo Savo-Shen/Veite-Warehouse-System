@@ -18,6 +18,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </association>
     </resultMap>
 
+    <select id="selectIdsByKeyword" resultType="java.lang.Long">
+        select sku.id
+        from wms_item_sku sku
+        inner join wms_item item on sku.item_id = item.id
+        where sku.sku_name like concat('%', #{word}, '%')
+        or sku.sku_code like concat('%', #{word}, '%')
+        or sku.barcode like concat('%', #{word}, '%')
+        or item.item_name like concat('%', #{word}, '%')
+        or item.item_code like concat('%', #{word}, '%')
+    </select>
+
     <select id="queryItemSkuMapVos" resultMap="itemSkuMapVo">
         select
             sku.id as sku_id,

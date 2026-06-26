@@ -17,6 +17,8 @@ import com.ruoyi.wms.domain.entity.CheckOrder;
 import com.ruoyi.wms.domain.entity.CheckOrderDetail;
 import com.ruoyi.wms.domain.vo.CheckOrderVo;
 import com.ruoyi.wms.mapper.CheckOrderMapper;
+import com.ruoyi.wms.utils.KeywordUtils;
+import com.ruoyi.wms.utils.OrderKeywordSearcher;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.SerializationUtils;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,7 @@ public class CheckOrderService {
     private final CheckOrderDetailService checkOrderDetailService;
     private final InventoryService inventoryService;
     private final InventoryHistoryService inventoryHistoryService;
+    private final OrderKeywordSearcher orderKeywordSearcher;
 
     /**
      * 查询库存盘点单据
@@ -75,6 +78,21 @@ public class CheckOrderService {
     private LambdaQueryWrapper<CheckOrder> buildQueryWrapper(CheckOrderBo bo) {
         // Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<CheckOrder> lqw = Wrappers.lambdaQuery();
+        // 综合搜索：按空白拆词，多词之间为“与”，每个词在单号/备注/仓库/明细商品间为“或”
+        for (String word : KeywordUtils.splitWords(bo.getKeyword())) {
+            List<Long> warehouseIds = orderKeywordSearcher.matchWarehouseIds(word);
+            List<Long> detailOrderIds = orderKeywordSearcher.matchCheckOrderIds(word);
+            lqw.and(wrapper -> {
+                wrapper.like(CheckOrder::getOrderNo, word)
+                    .or().like(CheckOrder::getRemark, word);
+                if (!warehouseIds.isEmpty()) {
+                    wrapper.or().in(CheckOrder::getWarehouseId, warehouseIds);
+                }
+                if (!detailOrderIds.isEmpty()) {
+                    wrapper.or().in(CheckOrder::getId, detailOrderIds);
+                }
+            });
+        }
         lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), CheckOrder::getOrderNo, bo.getOrderNo());
         lqw.eq(bo.getOrderStatus() != null, CheckOrder::getOrderStatus, bo.getOrderStatus());
         lqw.eq(bo.getTotalQuantity() != null, CheckOrder::getTotalQuantity, bo.getTotalQuantity());

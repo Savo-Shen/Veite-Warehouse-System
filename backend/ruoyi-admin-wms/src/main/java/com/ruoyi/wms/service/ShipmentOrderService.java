@@ -20,6 +20,8 @@ import com.ruoyi.wms.domain.entity.ShipmentOrder;
 import com.ruoyi.wms.domain.entity.ShipmentOrderDetail;
 import com.ruoyi.wms.domain.vo.ShipmentOrderVo;
 import com.ruoyi.wms.mapper.ShipmentOrderMapper;
+import com.ruoyi.wms.utils.KeywordUtils;
+import com.ruoyi.wms.utils.OrderKeywordSearcher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,7 @@ public class ShipmentOrderService {
     private final ShipmentOrderDetailService shipmentOrderDetailService;
     private final InventoryService inventoryService;
     private final InventoryHistoryService inventoryHistoryService;
+    private final OrderKeywordSearcher orderKeywordSearcher;
 
     /**
      * 查询出库单
@@ -75,6 +78,26 @@ public class ShipmentOrderService {
     private LambdaQueryWrapper<ShipmentOrder> buildQueryWrapper(ShipmentOrderBo bo) {
         Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<ShipmentOrder> lqw = Wrappers.lambdaQuery();
+        // 综合搜索：按空白拆词，多词之间为“与”，每个词在单号/业务单号/备注/客户/仓库/明细商品间为“或”
+        for (String word : KeywordUtils.splitWords(bo.getKeyword())) {
+            List<Long> merchantIds = orderKeywordSearcher.matchMerchantIds(word);
+            List<Long> warehouseIds = orderKeywordSearcher.matchWarehouseIds(word);
+            List<Long> detailOrderIds = orderKeywordSearcher.matchShipmentOrderIds(word);
+            lqw.and(wrapper -> {
+                wrapper.like(ShipmentOrder::getOrderNo, word)
+                    .or().like(ShipmentOrder::getBizOrderNo, word)
+                    .or().like(ShipmentOrder::getRemark, word);
+                if (!merchantIds.isEmpty()) {
+                    wrapper.or().in(ShipmentOrder::getMerchantId, merchantIds);
+                }
+                if (!warehouseIds.isEmpty()) {
+                    wrapper.or().in(ShipmentOrder::getWarehouseId, warehouseIds);
+                }
+                if (!detailOrderIds.isEmpty()) {
+                    wrapper.or().in(ShipmentOrder::getId, detailOrderIds);
+                }
+            });
+        }
         lqw.like(StringUtils.isNotBlank(bo.getOrderNo()), ShipmentOrder::getOrderNo, bo.getOrderNo());
         lqw.like(StringUtils.isNotBlank(bo.getBizOrderNo()), ShipmentOrder::getBizOrderNo, bo.getBizOrderNo());
         lqw.eq(bo.getOptType() != null, ShipmentOrder::getOptType, bo.getOptType());

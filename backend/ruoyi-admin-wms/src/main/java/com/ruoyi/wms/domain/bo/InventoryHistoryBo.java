@@ -82,6 +82,11 @@ public class InventoryHistoryBo extends BaseHistoryEntity {
     private String skuName;
     private String skuCode;
 
+    /**
+     * 综合搜索关键字：按空白拆词，匹配操作单号/商品名称/商品编号/规格名称/规格编号/条码
+     */
+    private String keyword;
+
     private String startTime;
     private String endTime;
 

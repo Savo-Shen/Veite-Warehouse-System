@@ -27,4 +27,9 @@ public interface ItemSkuMapper extends BaseMapperPlus<ItemSku, ItemSkuVo> {
     LocationVo queryItemLocationVo(Long id);
 
     int updateItemLocationIdById(@Param("id") Long id, @Param("itemLocationId") String itemLocationId);
+
+    /**
+     * 综合搜索：按关键字（规格名称/规格编号/条码/商品名称/商品编号）模糊匹配，返回命中的规格(sku) id 列表。
+     */
+    List<Long> selectIdsByKeyword(@Param("word") String word);
 }

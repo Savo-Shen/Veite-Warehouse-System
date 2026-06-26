@@ -1,63 +1,73 @@
 <template>
   <div class="app-container">
     <el-card>
-      <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="70px" @keyup.enter.native="handleQuery">
-        <el-form-item label="订单类型" prop="orderType">
-          <el-radio-group v-model="queryParams.orderType" @change="handleQuery">
-            <el-radio-button
-              :key="-1"
-              :label="-1"
-            >
-              全部
-            </el-radio-button>
-            <el-radio-button
-              v-for="item in wms_inventory_history_type"
-              :key="item.value"
-              :label="item.value"
-            >
-              {{ item.label }}
-            </el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="仓库" prop="warehouseId">
-          <el-select style="width: 100%" v-model="queryParams.warehouseId" placeholder="请选择仓库"
-                     filterable clearable>
-            <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                       :value="item.id"/>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="操作单号" prop="orderNo">
-          <el-input v-model="queryParams.orderNo" clearable placeholder="请输入操作单号"></el-input>
-        </el-form-item>
+      <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter.native="handleQuery">
+        <div style="display: flex;">
+          <el-form-item label="综合搜索" style="flex: 1;">
+            <el-input v-model="queryParams.keyword" clearable placeholder="搜索操作单号 / 商品 / 规格 / 编号 / 条码（多个关键字用空格分隔）"/>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+            <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+            <el-button type="text" @click="advancedSearchVisible = !advancedSearchVisible">高级搜索</el-button>
+          </el-form-item>
+        </div>
+        <el-collapse-transition>
+          <div v-if="advancedSearchVisible">
+            <el-form-item label="订单类型" prop="orderType">
+              <el-radio-group v-model="queryParams.orderType" @change="handleQuery">
+                <el-radio-button
+                  :key="-1"
+                  :label="-1"
+                >
+                  全部
+                </el-radio-button>
+                <el-radio-button
+                  v-for="item in wms_inventory_history_type"
+                  :key="item.value"
+                  :label="item.value"
+                >
+                  {{ item.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="仓库" prop="warehouseId">
+              <el-select style="width: 100%" v-model="queryParams.warehouseId" placeholder="请选择仓库"
+                         filterable clearable>
+                <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
+                           :value="item.id"/>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="操作单号" prop="orderNo">
+              <el-input v-model="queryParams.orderNo" clearable placeholder="请输入操作单号"></el-input>
+            </el-form-item>
 
-        <el-form-item label="商品名称" prop="itemName">
-          <el-input v-model="queryParams.itemName" clearable placeholder="请输入商品名称"></el-input>
-        </el-form-item>
-        <el-form-item label="商品编号" prop="itemCode">
-          <el-input v-model="queryParams.itemCode" clearable placeholder="请输入商品编号"></el-input>
-        </el-form-item>
-        <el-form-item label="规格名称" prop="skuName">
-          <el-input v-model="queryParams.skuName" clearable placeholder="请输入规格名称"></el-input>
-        </el-form-item>
-        <el-form-item label="规格编号" prop="skuCode">
-          <el-input v-model="queryParams.skuCode" clearable placeholder="请输入规格编号"></el-input>
-        </el-form-item>
-        <el-form-item label="操作时间" prop="createTimeRange">
-          <el-date-picker
-            v-model="queryParams.createTimeRange"
-            type="datetimerange"
-            range-separator="至"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            format="YYYY-MM-DD HH:mm:ss"
-            :default-time="defaultTime"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
-          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
-        </el-form-item>
+            <el-form-item label="商品名称" prop="itemName">
+              <el-input v-model="queryParams.itemName" clearable placeholder="请输入商品名称"></el-input>
+            </el-form-item>
+            <el-form-item label="商品编号" prop="itemCode">
+              <el-input v-model="queryParams.itemCode" clearable placeholder="请输入商品编号"></el-input>
+            </el-form-item>
+            <el-form-item label="规格名称" prop="skuName">
+              <el-input v-model="queryParams.skuName" clearable placeholder="请输入规格名称"></el-input>
+            </el-form-item>
+            <el-form-item label="规格编号" prop="skuCode">
+              <el-input v-model="queryParams.skuCode" clearable placeholder="请输入规格编号"></el-input>
+            </el-form-item>
+            <el-form-item label="操作时间" prop="createTimeRange">
+              <el-date-picker
+                v-model="queryParams.createTimeRange"
+                type="datetimerange"
+                range-separator="至"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                format="YYYY-MM-DD HH:mm:ss"
+                :default-time="defaultTime"
+                start-placeholder="开始时间"
+                end-placeholder="结束时间"
+              />
+            </el-form-item>
+          </div>
+        </el-collapse-transition>
       </el-form>
     </el-card>
 
@@ -148,9 +158,12 @@ const inventoryHistoryList = ref([]);
 const loading = ref(true);
 const total = ref(0);
 const queryRef = ref(null)
+// 高级搜索面板是否展开（默认仅显示综合搜索）
+const advancedSearchVisible = ref(false)
 const queryParams = ref({
   pageNum: 1,
   pageSize: 10,
+  keyword: undefined,
   orderType: -1,
   orderNo: undefined,
   itemName: undefined,
@@ -189,6 +202,9 @@ function handleQuery() {
 /** 重置按钮操作 */
 function resetQuery() {
   proxy.resetForm("queryRef");
+  // 综合搜索输入框无 prop，需手动清空
+  queryParams.value.keyword = undefined;
+  queryParams.value.orderType = -1;
   handleQuery();
 }
 
