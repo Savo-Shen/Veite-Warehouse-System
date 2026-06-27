@@ -58,7 +58,7 @@ BACKEND_PID=$!
 # 启动前端
 echo "启动前端..."
 (
-    cd "$DIR/frontend-Vue" && exec npm run dev
+    cd "$DIR/frontend-Vue" && exec pnpm run dev
 ) &
 FRONTEND_PID=$!
 

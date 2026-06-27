@@ -56,16 +56,16 @@ case "$1" in
         # 启动前端
         echo "启动前端服务..."
         cd "$FRONTEND_DIR"
-        nohup npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
+        nohup pnpm run dev > "$LOG_DIR/frontend.log" 2>&1 &
         FRONTEND_PID=$!
         echo "前端日志路径: $LOG_DIR/frontend.log"
 
         echo "系统后台运行中，可通过日志查看状态"
-        echo "停止命令：pkill -f 'spring-boot:run' && pkill -f 'npm run dev'"
+        echo "停止命令：pkill -f 'spring-boot:run' && pkill -f 'pnpm run dev'"
         ;;
     stop)
         pkill -f 'spring-boot:run'
-        pkill -f 'npm run dev'
+        pkill -f 'pnpm run dev'
         echo "系统已停止"
         ;;
     status)
