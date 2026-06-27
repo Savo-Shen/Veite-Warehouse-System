@@ -80,7 +80,7 @@ if /I "%~1"=="start" (
     ) else (
         echo 启动前端服务...
         cd /d "%FRONTEND_DIR%"
-        start "前端服务" cmd /k "npm run dev"
+        start "前端服务" cmd /k "pnpm run dev"
     )
 
     echo.

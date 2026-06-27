@@ -71,7 +71,7 @@ try {
     $BackendProcess = Start-Process -FilePath "mvn" -ArgumentList "spring-boot:run", "-pl", "ruoyi-admin-wms" -WorkingDirectory $BackendDir -NoNewWindow -PassThru
 
     Write-Host "启动前端..."
-    $FrontendProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $FrontendDir -NoNewWindow -PassThru
+    $FrontendProcess = Start-Process -FilePath "pnpm" -ArgumentList "run", "dev" -WorkingDirectory $FrontendDir -NoNewWindow -PassThru
 
     Write-Host "系统已启动 - 前端: http://localhost:80, 后端: http://localhost:8080"
     Write-Host "按 Ctrl+C 停止"
