@@ -74,10 +74,14 @@ public class CreateReceiptDraftTool implements AiTool {
         itemName.put("description", "商品/规格关键字，如“PU管 10*6.5”");
         Map<String, Object> itemQty = new LinkedHashMap<>();
         itemQty.put("type", "number");
-        itemQty.put("description", "入库数量");
+        itemQty.put("description", "入库数量。遇到“一卷/一捆/一箱”时填 1，“两卷/2卷”填 2，单位写到 unit。");
+        Map<String, Object> itemUnit = new LinkedHashMap<>();
+        itemUnit.put("type", "string");
+        itemUnit.put("description", "数量单位（可选），如卷、捆、米、箱、包、个。同一商品可能有“按米”和“按卷/捆”两种，单位决定选哪种。");
         Map<String, Object> itemProps = new LinkedHashMap<>();
         itemProps.put("name", itemName);
         itemProps.put("quantity", itemQty);
+        itemProps.put("unit", itemUnit);
         Map<String, Object> itemObj = new LinkedHashMap<>();
         itemObj.put("type", "object");
         itemObj.put("properties", itemProps);
@@ -157,6 +161,7 @@ public class CreateReceiptDraftTool implements AiTool {
             for (JsonNode it : itemsNode) {
                 String name = it.path("name").asText("");
                 BigDecimal qty = it.has("quantity") ? it.path("quantity").decimalValue() : BigDecimal.ZERO;
+                String unit = text(it, "unit");
                 if (name.isBlank()) {
                     continue;
                 }
@@ -168,12 +173,18 @@ public class CreateReceiptDraftTool implements AiTool {
                     unresolved.add(Map.of("name", name, "quantity", qty, "reason", "未找到商品"));
                     continue;
                 }
-                ItemSkuMapVo picked = rows.get(0);
+                // 按用户所说单位（卷/米/箱…）挑对应计量方式的商品，挑不到才退回第一个
+                ItemSkuMapVo picked = AiTool.pickByUnit(rows, unit);
+                boolean unitMatched = picked.getItem() != null && AiTool.sameUnitGroup(picked.getItem().getUnit(), unit);
                 if (rows.size() > 1) {
-                    warnings.add("商品“" + name + "”匹配到多个，已选“"
-                        + (picked.getItem() == null ? "" : picked.getItem().getItemName())
-                        + " / " + (picked.getItemSku() == null ? "" : picked.getItemSku().getSkuName())
-                        + "”，请确认。");
+                    String pickedName = (picked.getItem() == null ? "" : picked.getItem().getItemName())
+                        + " / " + (picked.getItemSku() == null ? "" : picked.getItemSku().getSkuName());
+                    if (unitMatched) {
+                        warnings.add("“" + name + "”按单位「" + unit + "」选中：" + pickedName + "（单位 "
+                            + picked.getItem().getUnit() + "），请确认。");
+                    } else {
+                        warnings.add("商品“" + name + "”匹配到多个，已选“" + pickedName + "”，请确认是否是想要的计量方式。");
+                    }
                 }
 
                 BigDecimal price = picked.getItemSku() == null ? null : picked.getItemSku().getCostPrice();
