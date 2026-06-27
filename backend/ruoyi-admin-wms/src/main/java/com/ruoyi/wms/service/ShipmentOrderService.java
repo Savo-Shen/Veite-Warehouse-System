@@ -26,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -120,6 +121,7 @@ public class ShipmentOrderService {
     public void insertByBo(ShipmentOrderBo bo) {
         // 校验出库单号唯一性
         validateShipmentOrderNo(bo.getOrderNo());
+        fillOrderTotals(bo);
         // 创建出库单
         ShipmentOrder add = MapstructUtils.convert(bo, ShipmentOrder.class);
         shipmentOrderMapper.insert(add);
@@ -143,6 +145,7 @@ public class ShipmentOrderService {
      */
     @Transactional
     public void updateByBo(ShipmentOrderBo bo) {
+        fillOrderTotals(bo);
         // 更新出库单
         ShipmentOrder update = MapstructUtils.convert(bo, ShipmentOrder.class);
         shipmentOrderMapper.updateById(update);
@@ -196,5 +199,26 @@ public class ShipmentOrderService {
         if (CollUtil.isEmpty(bo.getDetails())) {
             throw new BaseException("商品明细不能为空！");
         }
+    }
+
+    private void fillOrderTotals(ShipmentOrderBo bo) {
+        BigDecimal totalQuantity = BigDecimal.ZERO;
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        boolean hasAmount = false;
+
+        if (CollUtil.isNotEmpty(bo.getDetails())) {
+            for (ShipmentOrderDetailBo detail : bo.getDetails()) {
+                if (detail.getQuantity() != null) {
+                    totalQuantity = totalQuantity.add(detail.getQuantity());
+                }
+                if (detail.getAmount() != null) {
+                    totalAmount = totalAmount.add(detail.getAmount());
+                    hasAmount = true;
+                }
+            }
+        }
+
+        bo.setTotalQuantity(totalQuantity);
+        bo.setTotalAmount(hasAmount ? totalAmount : BigDecimal.ZERO);
     }
 }
