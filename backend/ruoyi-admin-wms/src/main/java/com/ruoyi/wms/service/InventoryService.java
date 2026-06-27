@@ -122,11 +122,11 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
     }
 
     public TableDataInfo<InventoryVo> queryWarehouseBoardList(InventoryBo bo, PageQuery pageQuery, String itemKeywords) {
-            return TableDataInfo.build(inventoryMapper.queryWarehouseBoardList(pageQuery.build(), bo, KeywordUtils.normalize(itemKeywords)));
+            return TableDataInfo.build(inventoryMapper.queryWarehouseBoardList(pageQuery.build(), bo, KeywordUtils.splitWordGroups(itemKeywords)));
     }
 
     public TableDataInfo<InventoryVo> queryItemBoardList(InventoryBo bo, PageQuery pageQuery, String itemKeywords) {
-        Page<InventoryVo> result = inventoryMapper.queryItemBoardList(pageQuery.build(), bo, KeywordUtils.normalize(itemKeywords));
+        Page<InventoryVo> result = inventoryMapper.queryItemBoardList(pageQuery.build(), bo, KeywordUtils.splitWordGroups(itemKeywords));
         return TableDataInfo.build(result);
     }
 
@@ -141,7 +141,7 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
      * @param ids          勾选的库存 id（可为空）
      */
     public List<InventoryExportVo> queryExportList(InventoryBo bo, String itemKeywords, Collection<Long> ids) {
-        List<InventoryVo> list = inventoryMapper.queryExportList(bo, KeywordUtils.normalize(itemKeywords));
+        List<InventoryVo> list = inventoryMapper.queryExportList(bo, KeywordUtils.splitWordGroups(itemKeywords));
         if (CollUtil.isEmpty(list)) {
             return Collections.emptyList();
         }

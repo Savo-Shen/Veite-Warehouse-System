@@ -20,13 +20,20 @@ public interface InventoryMapper extends BaseMapperPlus<Inventory, InventoryVo> 
     Page<InventoryVo> queryItemBoardList(
         Page<InventoryVo> page, 
         @Param("bo") InventoryBo bo,
-        @Param("itemKeywords") String itemKeywords
+        @Param("itemKeywordGroups") List<List<String>> itemKeywordGroups
     );
-    Page<InventoryVo> queryWarehouseBoardList(Page<InventoryVo> page, @Param("bo") InventoryBo bo, @Param("itemKeywords") String itemKeywords);
+    Page<InventoryVo> queryWarehouseBoardList(
+        Page<InventoryVo> page,
+        @Param("bo") InventoryBo bo,
+        @Param("itemKeywordGroups") List<List<String>> itemKeywordGroups
+    );
 
     /**
      * 查询用于导出的库存列表（不分页，复用看板查询条件）
      */
-    List<InventoryVo> queryExportList(@Param("bo") InventoryBo bo, @Param("itemKeywords") String itemKeywords);
+    List<InventoryVo> queryExportList(
+        @Param("bo") InventoryBo bo,
+        @Param("itemKeywordGroups") List<List<String>> itemKeywordGroups
+    );
 
 }

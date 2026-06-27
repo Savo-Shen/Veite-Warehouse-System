@@ -5,6 +5,7 @@
         <button :class="{ active: type === 'price' }" @click="switchType('price')">查价格</button>
         <button :class="{ active: type === 'receipt' }" @click="switchType('receipt')">入库</button>
         <button :class="{ active: type === 'shipment' }" @click="switchType('shipment')">出库</button>
+        <button @click="goAi">AI助手</button>
       </div>
       <el-dropdown @command="handleCommand">
         <img :src="userStore.avatar" class="avatar" />
@@ -146,6 +147,8 @@ import useUserStore from "@/store/modules/user";
 import { useWmsStore } from "@/store/modules/wms";
 
 const router = useRouter();
+
+const goAi = () => router.push('/wms/ai');
 const route = useRoute();
 const userStore = useUserStore();
 const wmsStore = useWmsStore();
@@ -281,8 +284,8 @@ onMounted(() => {
 <style scoped lang="scss">
 .mobile-wms { min-height: 100vh; color: #1f2937; background: #f3f6fa; }
 header { position: sticky; z-index: 20; top: 0; display: flex; align-items: center; justify-content: space-between; height: calc(58px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 14px 0; background: rgba(255,255,255,.96); border-bottom: 1px solid #e8edf3; backdrop-filter: blur(12px); }
-.type-tabs { display: flex; gap: 4px; padding: 4px; background: #eef3f8; border-radius: 12px; }
-.type-tabs button { min-width: 70px; padding: 8px 12px; color: #667085; background: transparent; border: 0; border-radius: 9px; font-size: 15px; font-weight: 700; }
+.type-tabs { display: flex; flex: 1; gap: 4px; min-width: 0; padding: 4px; background: #eef3f8; border-radius: 12px; }
+.type-tabs button { flex: 1; min-width: 0; padding: 8px 7px; color: #667085; background: transparent; border: 0; border-radius: 9px; font-size: 14px; font-weight: 700; white-space: nowrap; }
 .type-tabs button.active { color: #fff; background: var(--el-color-primary); box-shadow: 0 4px 12px rgba(64,158,255,.28); }
 .avatar { width: 38px; height: 38px; object-fit: cover; border-radius: 50%; }
 main { padding: 18px 12px calc(28px + env(safe-area-inset-bottom)); }

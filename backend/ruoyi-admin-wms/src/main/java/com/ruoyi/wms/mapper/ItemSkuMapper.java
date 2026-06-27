@@ -17,7 +17,7 @@ public interface ItemSkuMapper extends BaseMapperPlus<ItemSku, ItemSkuVo> {
     IPage<ItemSkuMapVo> selectByBo(
         IPage<ItemSkuVo> page, 
         @Param("bo") ItemSkuBo bo,
-        @Param("itemKeywords") String itemKeywords
+        @Param("itemKeywordGroups") List<List<String>> itemKeywordGroups
     );
 
     List<ItemSkuMapVo> queryItemSkuMapVos(Collection<Long> ids);

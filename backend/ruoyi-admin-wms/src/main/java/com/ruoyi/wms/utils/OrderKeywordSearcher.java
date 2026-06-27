@@ -79,7 +79,10 @@ public class OrderKeywordSearcher {
         if (StringUtils.isBlank(word)) {
             return Collections.emptyList();
         }
-        return itemSkuMapper.selectIdsByKeyword(word);
+        return KeywordUtils.expandWord(word).stream()
+            .flatMap(alias -> itemSkuMapper.selectIdsByKeyword(alias).stream())
+            .distinct()
+            .collect(Collectors.toList());
     }
 
     /** 含某关键字命中商品的入库单 ID（通过入库单明细反查）。 */

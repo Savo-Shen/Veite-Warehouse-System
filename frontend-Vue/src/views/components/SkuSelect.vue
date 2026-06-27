@@ -1,5 +1,5 @@
 <template>
-  <el-drawer :model-value="show" title="商品选择" @close="handleCancelClick" :size="size" :close-on-click-modal="false" append-to-body>
+  <el-drawer :model-value="show" title="商品选择" class="mobile-friendly-selector" @close="handleCancelClick" :size="size" :close-on-click-modal="false" append-to-body>
     <el-form :model="query" ref="queryFormRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter="loadAll">
       <div class="selector-search-row">
         <el-form-item label="智能搜索" style="flex: 1;">
@@ -116,7 +116,7 @@
                   @pagination="getList" class="mr10"/>
     </el-row>
     <template v-slot:footer>
-      <div style="width: 100%;display: flex;justify-content: space-between">
+      <div class="selector-footer">
         <span>
           <el-button @click="goCreateItem" icon="Plus">创建商品</el-button>
           <el-button @click="loadAll" icon="Refresh">刷新</el-button>
@@ -305,12 +305,88 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .mobile-friendly-selector {
+    width: 100% !important;
+  }
+
+  .mobile-friendly-selector .el-drawer__header {
+    padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+    margin-bottom: 0;
+    font-weight: 700;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .mobile-friendly-selector .el-drawer__body {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .mobile-friendly-selector .el-form {
+    flex: 0 0 auto;
+  }
+
   .selector-search-row {
     display: block;
   }
 
   .selector-search-row .el-form-item {
     margin-right: 0;
+    margin-bottom: 10px;
+  }
+
+  .selector-search-row .el-form-item__label {
+    justify-content: flex-start;
+    width: auto !important;
+    margin-bottom: 6px;
+  }
+
+  .selector-search-row .el-form-item__content {
+    margin-left: 0 !important;
+  }
+
+  .selector-search-row .el-button {
+    min-height: 38px;
+  }
+
+  .mobile-friendly-selector .el-table {
+    flex: 1 1 auto;
+    min-height: 260px;
+    overflow: auto;
+  }
+
+  .mobile-friendly-selector .el-table__cell {
+    padding: 9px 0;
+  }
+
+  .mobile-friendly-selector .el-pagination {
+    justify-content: center;
+    margin: 10px 0 0;
+    white-space: normal;
+  }
+
+  .mobile-friendly-selector .el-drawer__footer {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid #eef2f7;
+  }
+
+  .selector-footer {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .selector-footer span {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .selector-footer .el-button {
+    min-height: 40px;
+    margin-left: 0 !important;
   }
 
   .mobile-hide-column {

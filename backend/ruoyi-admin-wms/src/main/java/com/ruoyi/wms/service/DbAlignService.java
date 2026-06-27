@@ -62,6 +62,43 @@ public class DbAlignService {
     private static final String ADD_LOCATION_WAREHOUSE = "ALTER TABLE `wms_location` ADD COLUMN `warehouse_id` bigint(20) NULL DEFAULT NULL COMMENT '所属仓库' AFTER `location_code`";
     private static final String ADD_WAREHOUSE_SHELF_LAYOUT = "ALTER TABLE `wms_warehouse` ADD COLUMN `shelf_layout` longtext NULL DEFAULT NULL COMMENT '货架3D布局(JSON)' AFTER `remark`";
 
+    // 出入库补充图片
+    private static final String ADD_SHIPMENT_SUPPLEMENT_IMAGES = "ALTER TABLE `wms_shipment_order` ADD COLUMN `supplement_image_ids` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '补充图片OSS ID，多个用逗号分隔' AFTER `remark`";
+    private static final String ADD_RECEIPT_SUPPLEMENT_IMAGES = "ALTER TABLE `wms_receipt_order` ADD COLUMN `supplement_image_ids` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '补充图片OSS ID，多个用逗号分隔' AFTER `remark`";
+
+    // AI 助手会话历史（按用户隔离）
+    private static final String CREATE_AI_CONVERSATION = """
+        CREATE TABLE IF NOT EXISTS `wms_ai_conversation` (
+          `id` bigint(20) NOT NULL COMMENT '主键',
+          `title` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '会话标题（取首条消息）',
+          `user_id` bigint(20) NOT NULL COMMENT '所属用户ID',
+          `create_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+          `create_time` datetime(3) NULL DEFAULT NULL,
+          `update_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+          `update_time` datetime(3) NULL DEFAULT NULL,
+          PRIMARY KEY (`id`) USING BTREE,
+          INDEX `idx_user_update`(`user_id`, `update_time`) USING BTREE
+        ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'AI 会话表'
+        """;
+
+    private static final String CREATE_AI_MESSAGE = """
+        CREATE TABLE IF NOT EXISTS `wms_ai_message` (
+          `id` bigint(20) NOT NULL COMMENT '主键',
+          `conversation_id` bigint(20) NOT NULL COMMENT '所属会话ID',
+          `role` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '角色：user / assistant',
+          `content` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '消息内容',
+          `tool_trace` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '工具调用轨迹(JSON)',
+          `draft` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '建单草稿(JSON)',
+          `elapsed_ms` bigint(20) NULL DEFAULT NULL COMMENT '本次回复耗时(毫秒)',
+          `create_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+          `create_time` datetime(3) NULL DEFAULT NULL,
+          `update_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+          `update_time` datetime(3) NULL DEFAULT NULL,
+          PRIMARY KEY (`id`) USING BTREE,
+          INDEX `idx_conversation`(`conversation_id`, `id`) USING BTREE
+        ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'AI 消息表'
+        """;
+
     private static final String MENU_TAG_M = "INSERT INTO `sys_menu` VALUES (1940000000000000001, '标签管理', 1808758090157985794, 5, 'itemTag', 'wms/basic/itemTag/index', NULL, 0, 0, 'C', '1', '1', 'wms:itemTag:list', 'documentation', 'admin', NOW(), 'admin', NOW(), '商品标签管理菜单')";
     private static final String MENU_TAG_Q = "INSERT INTO `sys_menu` VALUES (1940000000000000002, '标签查询', 1940000000000000001, 1, '', NULL, NULL, 0, 0, 'F', '1', '1', 'wms:itemTag:list', '#', 'admin', NOW(), 'admin', NOW(), '')";
     private static final String MENU_TAG_E = "INSERT INTO `sys_menu` VALUES (1940000000000000003, '标签编辑', 1940000000000000001, 2, '', NULL, NULL, 0, 0, 'F', '1', '1', 'wms:itemTag:edit', '#', 'admin', NOW(), 'admin', NOW(), '')";
@@ -73,6 +110,10 @@ public class DbAlignService {
         steps.add(new Step("商品标签关联表 (wms_item_tag_rel)", "表", () -> tableExists("wms_item_tag_rel"), List.of(CREATE_ITEM_TAG_REL)));
         steps.add(new Step("位置-所属仓库 (wms_location.warehouse_id)", "字段", () -> columnExists("wms_location", "warehouse_id"), List.of(ADD_LOCATION_WAREHOUSE)));
         steps.add(new Step("仓库-货架布局 (wms_warehouse.shelf_layout)", "字段", () -> columnExists("wms_warehouse", "shelf_layout"), List.of(ADD_WAREHOUSE_SHELF_LAYOUT)));
+        steps.add(new Step("出库单-补充图片 (wms_shipment_order.supplement_image_ids)", "字段", () -> columnExists("wms_shipment_order", "supplement_image_ids"), List.of(ADD_SHIPMENT_SUPPLEMENT_IMAGES)));
+        steps.add(new Step("入库单-补充图片 (wms_receipt_order.supplement_image_ids)", "字段", () -> columnExists("wms_receipt_order", "supplement_image_ids"), List.of(ADD_RECEIPT_SUPPLEMENT_IMAGES)));
+        steps.add(new Step("AI 会话表 (wms_ai_conversation)", "表", () -> tableExists("wms_ai_conversation"), List.of(CREATE_AI_CONVERSATION)));
+        steps.add(new Step("AI 消息表 (wms_ai_message)", "表", () -> tableExists("wms_ai_message"), List.of(CREATE_AI_MESSAGE)));
         steps.add(new Step("菜单-标签管理", "菜单", () -> menuExists(1940000000000000001L), List.of(MENU_TAG_M)));
         steps.add(new Step("菜单-标签查询", "菜单", () -> menuExists(1940000000000000002L), List.of(MENU_TAG_Q)));
         steps.add(new Step("菜单-标签编辑", "菜单", () -> menuExists(1940000000000000003L), List.of(MENU_TAG_E)));

@@ -90,6 +90,33 @@ export const constantRoutes = [
       }
     ]
   },
+  {
+    path: '',
+    component: Layout,
+    children: [
+      {
+        path: '/wms/ai',
+        component: () => import('@/views/wms/ai/index'),
+        name: 'WmsAiAssistant',
+        meta: { title: 'AI 助手', icon: 'guide' }
+      }
+    ]
+  },
+  {
+    // 静态兜底入口：即使数据库缺表/缺菜单导致动态菜单不出来，
+    // 也能直接访问 /wms/dbAlign 做一键对齐，解决“打不开对齐页”的鸡生蛋问题
+    path: '',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '/wms/dbAlign',
+        component: () => import('@/views/wms/tool/dbAlign/index'),
+        name: 'WmsDbAlignFallback',
+        meta: { title: '数据库对齐', icon: 'set-up' }
+      }
+    ]
+  },
   // {
   //   path: '',
   //   component: Layout,
