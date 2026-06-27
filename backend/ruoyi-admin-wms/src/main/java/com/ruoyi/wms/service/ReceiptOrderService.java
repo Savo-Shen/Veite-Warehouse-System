@@ -27,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 // import java.util.Map;
@@ -115,6 +116,7 @@ public class ReceiptOrderService {
     public void insertByBo(ReceiptOrderBo bo) {
         // 校验入库单号唯一性
         validateReceiptOrderNo(bo.getOrderNo());
+        fillOrderTotals(bo);
         // 创建入库单
         ReceiptOrder add = MapstructUtils.convert(bo, ReceiptOrder.class);
         receiptOrderMapper.insert(add);
@@ -166,6 +168,7 @@ public class ReceiptOrderService {
      */
     @Transactional
     public void updateByBo(ReceiptOrderBo bo) {
+        fillOrderTotals(bo);
         // 更新入库单
         ReceiptOrder update = MapstructUtils.convert(bo, ReceiptOrder.class);
         receiptOrderMapper.updateById(update);
@@ -214,5 +217,26 @@ public class ReceiptOrderService {
         receiptOrderLqw.eq(ReceiptOrder::getOrderNo, receiptOrderNo);
         ReceiptOrder receiptOrder = receiptOrderMapper.selectOne(receiptOrderLqw);
         Assert.isNull(receiptOrder, "入库单号重复，请手动修改");
+    }
+
+    private void fillOrderTotals(ReceiptOrderBo bo) {
+        BigDecimal totalQuantity = BigDecimal.ZERO;
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        boolean hasAmount = false;
+
+        if (CollUtil.isNotEmpty(bo.getDetails())) {
+            for (ReceiptOrderDetailBo detail : bo.getDetails()) {
+                if (detail.getQuantity() != null) {
+                    totalQuantity = totalQuantity.add(detail.getQuantity());
+                }
+                if (detail.getAmount() != null) {
+                    totalAmount = totalAmount.add(detail.getAmount());
+                    hasAmount = true;
+                }
+            }
+        }
+
+        bo.setTotalQuantity(totalQuantity);
+        bo.setTotalAmount(hasAmount ? totalAmount : BigDecimal.ZERO);
     }
 }
