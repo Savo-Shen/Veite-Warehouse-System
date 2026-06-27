@@ -48,6 +48,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="bo.startTime != null and bo.startTime != '' and bo.endTime != null and bo.endTime != ''">
                 and (history.create_time between #{bo.startTime} and #{bo.endTime})
             </if>
+            <if test="bo.keyword != null and bo.keyword != ''">
+                <foreach collection="bo.keyword.split(' ')" item="word">
+                    and (
+                    history.order_no like concat('%', #{word}, '%')
+                    or item.item_name like concat('%', #{word}, '%')
+                    or item.item_code like concat('%', #{word}, '%')
+                    or sku.sku_name like concat('%', #{word}, '%')
+                    or sku.sku_code like concat('%', #{word}, '%')
+                    or sku.barcode like concat('%', #{word}, '%')
+                    )
+                </foreach>
+            </if>
         </where>
         order by history.create_time desc
     </select>

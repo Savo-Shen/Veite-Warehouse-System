@@ -46,6 +46,17 @@ export function logout() {
   })
 }
 
+// 续期当前设备登录状态
+export function renewToken() {
+  return request({
+    url: '/renewToken',
+    method: 'post',
+    headers: {
+      repeatSubmit: false
+    }
+  })
+}
+
 // 获取验证码
 export function getCodeImg() {
   return request({

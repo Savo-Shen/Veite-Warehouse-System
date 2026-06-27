@@ -1,5 +1,5 @@
-import { login, logout, getInfo } from '@/api/login'
-import { getToken, setToken, removeToken } from '@/utils/auth'
+import { login, logout, getInfo, renewToken } from '@/api/login'
+import { getToken, setToken, removeToken, isRememberDevice } from '@/utils/auth'
 import defAva from '@/assets/logo/logo.png'
 
 const useUserStore = defineStore(
@@ -22,7 +22,7 @@ const useUserStore = defineStore(
         const uuid = userInfo.uuid
         return new Promise((resolve, reject) => {
           login(username, password, code, uuid).then(res => {
-            setToken(res.data.token)
+            setToken(res.data.token, userInfo.rememberMe)
             this.token = res.data.token
             resolve()
           }).catch(error => {
@@ -50,6 +50,15 @@ const useUserStore = defineStore(
           }).catch(error => {
             reject(error)
           })
+        })
+      },
+      // 续期常用设备登录状态
+      renewSession() {
+        return renewToken().then(res => {
+          if (this.token) {
+            setToken(this.token, isRememberDevice())
+          }
+          return res
         })
       },
       // 退出系统

@@ -1,8 +1,8 @@
 <template>
-  <el-drawer :model-value="show" title="选择库存" @close="handleCancelClick" :size="size" :close-on-click-modal="false"
+  <el-drawer :model-value="show" title="选择库存" class="mobile-friendly-selector" @close="handleCancelClick" :size="size" :close-on-click-modal="false"
              append-to-body>
     <el-form :model="query" ref="queryFormRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter="loadAll">
-      <div style="display: flex;">
+      <div class="selector-search-row">
         <el-form-item label="智能搜索" style="flex: 1;">
           <el-input v-model="query.itemKeywords" clearable placeholder="输入商品或规格名称"/>
         </el-form-item>
@@ -63,7 +63,7 @@
           <div v-if="row.itemSku.barcode">条码：{{ row.itemSku.barcode }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="单价">
+      <el-table-column label="单价" class-name="mobile-hide-column" label-class-name="mobile-hide-column">
         <template #default="{ row }">
           <div v-if="row.itemSku.sellingPrice">{{ row.itemSku.sellingPrice }}</div>
           <div v-else>暂无售价</div>
@@ -103,7 +103,7 @@
     </el-row>
 
     <template v-slot:footer>
-      <div style="width: 100%;display: flex;justify-content: space-between">
+      <div class="selector-footer">
         <span>
         </span>
         <span>
@@ -294,5 +294,98 @@ onBeforeUnmount(() => {
 .el-statistic__content {
   font-size: 14px;
 }
-</style>
 
+@media (max-width: 768px) {
+  .mobile-friendly-selector {
+    width: 100% !important;
+  }
+
+  .mobile-friendly-selector .el-drawer__header {
+    padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+    margin-bottom: 0;
+    font-weight: 700;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .mobile-friendly-selector .el-drawer__body {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .mobile-friendly-selector .el-form {
+    flex: 0 0 auto;
+  }
+
+  .selector-search-row {
+    display: block;
+  }
+
+  .selector-search-row .el-form-item {
+    margin-right: 0;
+    margin-bottom: 10px;
+  }
+
+  .selector-search-row .el-form-item__label {
+    justify-content: flex-start;
+    width: auto !important;
+    margin-bottom: 6px;
+  }
+
+  .selector-search-row .el-form-item__content {
+    margin-left: 0 !important;
+  }
+
+  .selector-search-row .el-button {
+    min-height: 38px;
+  }
+
+  .mobile-friendly-selector .el-table {
+    flex: 1 1 auto;
+    min-height: 260px;
+    overflow: auto;
+  }
+
+  .mobile-friendly-selector .el-table__cell {
+    padding: 9px 0;
+  }
+
+  .mobile-friendly-selector .el-pagination {
+    justify-content: center;
+    margin: 10px 0 0;
+    white-space: normal;
+  }
+
+  .mobile-friendly-selector .el-drawer__footer {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid #eef2f7;
+  }
+
+  .selector-footer {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .selector-footer span {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .selector-footer span:empty {
+    display: none;
+  }
+
+  .selector-footer .el-button {
+    min-height: 40px;
+    margin-left: 0 !important;
+  }
+
+  .mobile-hide-column {
+    display: none !important;
+  }
+}
+</style>

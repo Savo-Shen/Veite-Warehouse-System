@@ -17,6 +17,8 @@ import com.ruoyi.wms.domain.entity.MovementOrder;
 import com.ruoyi.wms.domain.entity.MovementOrderDetail;
 import com.ruoyi.wms.domain.vo.MovementOrderVo;
 import com.ruoyi.wms.mapper.MovementOrderMapper;
+import com.ruoyi.wms.utils.KeywordUtils;
+import com.ruoyi.wms.utils.OrderKeywordSearcher;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.SerializationUtils;
 import org.springframework.stereotype.Service;
@@ -41,6 +43,7 @@ public class MovementOrderService {
     private final MovementOrderDetailService movementOrderDetailService;
     private final InventoryService inventoryService;
     private final InventoryHistoryService inventoryHistoryService;
+    private final OrderKeywordSearcher orderKeywordSearcher;
 
 
     /**
@@ -75,6 +78,22 @@ public class MovementOrderService {
     private LambdaQueryWrapper<MovementOrder> buildQueryWrapper(MovementOrderBo bo) {
         // Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<MovementOrder> lqw = Wrappers.lambdaQuery();
+        // 综合搜索：按空白拆词，多词之间为“与”，每个词在单号/备注/源仓库/目标仓库/明细商品间为“或”
+        for (String word : KeywordUtils.splitWords(bo.getKeyword())) {
+            List<Long> warehouseIds = orderKeywordSearcher.matchWarehouseIds(word);
+            List<Long> detailOrderIds = orderKeywordSearcher.matchMovementOrderIds(word);
+            lqw.and(wrapper -> {
+                wrapper.like(MovementOrder::getOrderNo, word)
+                    .or().like(MovementOrder::getRemark, word);
+                if (!warehouseIds.isEmpty()) {
+                    wrapper.or().in(MovementOrder::getSourceWarehouseId, warehouseIds)
+                        .or().in(MovementOrder::getTargetWarehouseId, warehouseIds);
+                }
+                if (!detailOrderIds.isEmpty()) {
+                    wrapper.or().in(MovementOrder::getId, detailOrderIds);
+                }
+            });
+        }
         lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), MovementOrder::getOrderNo, bo.getOrderNo());
         lqw.eq(bo.getSourceWarehouseId() != null, MovementOrder::getSourceWarehouseId, bo.getSourceWarehouseId());
         lqw.eq(bo.getTargetWarehouseId() != null, MovementOrder::getTargetWarehouseId, bo.getTargetWarehouseId());

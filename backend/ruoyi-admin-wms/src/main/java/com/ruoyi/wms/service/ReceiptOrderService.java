@@ -21,6 +21,8 @@ import com.ruoyi.wms.domain.entity.ReceiptOrder;
 import com.ruoyi.wms.domain.entity.ReceiptOrderDetail;
 import com.ruoyi.wms.domain.vo.ReceiptOrderVo;
 import com.ruoyi.wms.mapper.ReceiptOrderMapper;
+import com.ruoyi.wms.utils.KeywordUtils;
+import com.ruoyi.wms.utils.OrderKeywordSearcher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +46,7 @@ public class ReceiptOrderService {
     private final ReceiptOrderDetailService receiptOrderDetailService;
     private final InventoryService inventoryService;
     private final InventoryHistoryService inventoryHistoryService;
+    private final OrderKeywordSearcher orderKeywordSearcher;
 
     /**
      * 查询入库单
@@ -75,10 +78,30 @@ public class ReceiptOrderService {
     private LambdaQueryWrapper<ReceiptOrder> buildQueryWrapper(ReceiptOrderBo bo) {
         // Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<ReceiptOrder> lqw = Wrappers.lambdaQuery();
-        lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), ReceiptOrder::getOrderNo, bo.getOrderNo());
+        // 综合搜索：按空白拆词，多词之间为“与”，每个词在单号/业务单号/备注/供应商/仓库/明细商品间为“或”
+        for (String word : KeywordUtils.splitWords(bo.getKeyword())) {
+            List<Long> merchantIds = orderKeywordSearcher.matchMerchantIds(word);
+            List<Long> warehouseIds = orderKeywordSearcher.matchWarehouseIds(word);
+            List<Long> detailOrderIds = orderKeywordSearcher.matchReceiptOrderIds(word);
+            lqw.and(wrapper -> {
+                wrapper.like(ReceiptOrder::getOrderNo, word)
+                    .or().like(ReceiptOrder::getBizOrderNo, word)
+                    .or().like(ReceiptOrder::getRemark, word);
+                if (!merchantIds.isEmpty()) {
+                    wrapper.or().in(ReceiptOrder::getMerchantId, merchantIds);
+                }
+                if (!warehouseIds.isEmpty()) {
+                    wrapper.or().in(ReceiptOrder::getWarehouseId, warehouseIds);
+                }
+                if (!detailOrderIds.isEmpty()) {
+                    wrapper.or().in(ReceiptOrder::getId, detailOrderIds);
+                }
+            });
+        }
+        lqw.like(StringUtils.isNotBlank(bo.getOrderNo()), ReceiptOrder::getOrderNo, bo.getOrderNo());
+        lqw.like(StringUtils.isNotBlank(bo.getBizOrderNo()), ReceiptOrder::getBizOrderNo, bo.getBizOrderNo());
         lqw.eq(bo.getOptType() != null, ReceiptOrder::getOptType, bo.getOptType());
         lqw.eq(bo.getMerchantId() != null, ReceiptOrder::getMerchantId, bo.getMerchantId());
-        lqw.eq(StringUtils.isNotBlank(bo.getOrderNo()), ReceiptOrder::getOrderNo, bo.getOrderNo());
         lqw.eq(bo.getTotalAmount() != null, ReceiptOrder::getTotalAmount, bo.getTotalAmount());
         lqw.eq(bo.getOrderStatus() != null, ReceiptOrder::getOrderStatus, bo.getOrderStatus());
         lqw.orderByDesc(BaseEntity::getCreateTime);

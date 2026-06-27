@@ -70,15 +70,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     and loc.id = #{bo.itemLocationId}
                 </if>
             </if>
-        <if test="itemKeywords != null and itemKeywords != ''">
-            <foreach collection="itemKeywords.split(' ')" item="word">
+        <if test="itemKeywordGroups != null and itemKeywordGroups.size() > 0">
+            <foreach collection="itemKeywordGroups" item="group">
                 and (
-                item.item_name like concat('%', #{word}, '%')
-                or item.item_code like concat('%', #{word}, '%')
-                or sku.sku_name like concat('%', #{word}, '%')
-                or sku.sku_code like concat('%', #{word}, '%')
-                or sku.barcode like concat('%', #{word}, '%')
-                or loc.location_code like concat('%', #{word}, '%')
+                <foreach collection="group" item="word" separator=" or ">
+                    item.item_name like concat('%', #{word}, '%')
+                    or item.item_code like concat('%', #{word}, '%')
+                    or sku.sku_name like concat('%', #{word}, '%')
+                    or sku.sku_code like concat('%', #{word}, '%')
+                    or sku.barcode like concat('%', #{word}, '%')
+                    or loc.location_code like concat('%', #{word}, '%')
+                </foreach>
                 )
             </foreach>
         </if>

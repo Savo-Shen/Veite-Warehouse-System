@@ -32,4 +32,9 @@ public class ReceiptOrder extends BaseOrder {
      */
     private Long merchantId;
 
+    /**
+     * 补充图片 OSS ID，多个用逗号分隔
+     */
+    private String supplementImageIds;
+
 }

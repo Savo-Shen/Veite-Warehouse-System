@@ -21,6 +21,16 @@
       overflow-y: auto;
     }
 
+    @media (max-width: 768px) {
+      html,
+      body,
+      #app {
+        width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+      }
+    }
+
     .chromeframe {
       margin: 0.2em 0;
       background: #ccc;

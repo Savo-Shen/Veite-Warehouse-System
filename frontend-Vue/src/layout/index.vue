@@ -1,14 +1,14 @@
 <template>
   <div :class="classObj" class="app-wrapper" :style="{ '--current-color': theme }">
-    <div v-if="device === 'mobile' && sidebar.opened" class="drawer-bg" @click="handleClickOutside"/>
-    <sidebar v-if="!sidebar.hide" class="sidebar-container" />
-    <div :class="{ hasTagsView: needTagsView, sidebarHide: sidebar.hide }" class="main-container">
-      <div :class="{ 'fixed-header': fixedHeader }">
+    <div v-if="!isMobileStandalone && device === 'mobile' && sidebar.opened" class="drawer-bg" @click="handleClickOutside"/>
+    <sidebar v-if="!isMobileStandalone && !sidebar.hide" class="sidebar-container" />
+    <div :class="{ hasTagsView: needTagsView && !isMobileStandalone, sidebarHide: sidebar.hide || isMobileStandalone }" class="main-container">
+      <div v-if="!isMobileStandalone" :class="{ 'fixed-header': fixedHeader }">
         <navbar @setLayout="setLayout" />
         <tags-view v-if="needTagsView" />
       </div>
       <app-main />
-      <settings ref="settingRef" />
+      <settings v-if="!isMobileStandalone" ref="settingRef" />
     </div>
   </div>
 </template>
@@ -29,12 +29,19 @@ const sidebar = computed(() => useAppStore().sidebar);
 const device = computed(() => useAppStore().device);
 const needTagsView = computed(() => settingsStore.tagsView);
 const fixedHeader = computed(() => settingsStore.fixedHeader);
+const route = useRoute()
+
+const mobileStandalonePaths = ['/receiptOrderEdit', '/shipmentOrderEdit', '/wms/ai']
+const isMobileStandalone = computed(() => (
+  device.value === 'mobile' && mobileStandalonePaths.includes(route.path)
+))
 
 const classObj = computed(() => ({
   hideSidebar: !sidebar.value.opened,
   openSidebar: sidebar.value.opened,
   withoutAnimation: sidebar.value.withoutAnimation,
-  mobile: device.value === 'mobile'
+  mobile: device.value === 'mobile',
+  mobileStandalone: isMobileStandalone.value
 }))
 
 const { width, height } = useWindowSize();
@@ -107,5 +114,15 @@ function setLayout() {
 
 .mobile .fixed-header {
   width: 100%;
+}
+
+.mobileStandalone {
+  :deep(.app-main) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
 }
 </style>

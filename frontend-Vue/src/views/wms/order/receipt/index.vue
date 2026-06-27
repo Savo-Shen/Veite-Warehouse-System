@@ -1,62 +1,97 @@
 <template>
   <div class="app-container">
-    <el-card>
-      <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="70px">
-        <el-form-item label="入库状态" prop="receiptOrderStatus">
-          <el-radio-group v-model="queryParams.orderStatus" @change="handleQuery">
-            <el-radio-button
-              :key="-2"
-              :label="-2"
-            >
-              全部
-            </el-radio-button>
-            <el-radio-button
-              v-for="item in wms_receipt_status"
-              :key="item.value"
-              :label="item.value"
-            >
-              {{ item.label }}
-            </el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="入库类型" prop="orderStatus">
-          <el-radio-group v-model="queryParams.optType" @change="handleQuery">
-            <el-radio-button
-              :key="-1"
-              :label="-1"
-            >
-              全部
-            </el-radio-button>
-            <el-radio-button
-              v-for="item in wms_receipt_type"
-              :key="item.value"
-              :label="item.value"
-            >
-              {{ item.label }}
-            </el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="入库单号" prop="orderNo">
-          <el-input
-            v-model="queryParams.orderNo"
-            placeholder="请输入入库单号"
-            clearable
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item label="业务单号" prop="bizOrderNo">
-          <el-input
-            v-model="queryParams.bizOrderNo"
-            placeholder="请输入业务单号"
-            clearable
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
-          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
-        </el-form-item>
+    <el-card class="desktop-only">
+      <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter="handleQuery">
+        <div style="display: flex;">
+          <el-form-item label="综合搜索" style="flex: 1;">
+            <el-input v-model="queryParams.keyword" clearable placeholder="搜索入库单号 / 业务单号 / 备注 / 供应商 / 仓库 / 商品·规格·条码（多个关键字用空格分隔）"/>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+            <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+            <el-button type="text" @click="advancedSearchVisible = !advancedSearchVisible">高级搜索</el-button>
+          </el-form-item>
+        </div>
+        <el-collapse-transition>
+          <div v-if="advancedSearchVisible">
+            <el-form-item label="入库状态" prop="orderStatus">
+              <el-radio-group v-model="queryParams.orderStatus" @change="handleQuery">
+                <el-radio-button
+                  :key="-2"
+                  :label="-2"
+                >
+                  全部
+                </el-radio-button>
+                <el-radio-button
+                  v-for="item in wms_receipt_status"
+                  :key="item.value"
+                  :label="item.value"
+                >
+                  {{ item.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="入库类型" prop="optType">
+              <el-radio-group v-model="queryParams.optType" @change="handleQuery">
+                <el-radio-button
+                  :key="-1"
+                  :label="-1"
+                >
+                  全部
+                </el-radio-button>
+                <el-radio-button
+                  v-for="item in wms_receipt_type"
+                  :key="item.value"
+                  :label="item.value"
+                >
+                  {{ item.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="入库单号" prop="orderNo">
+              <el-input
+                v-model="queryParams.orderNo"
+                placeholder="请输入入库单号"
+                clearable
+                @keyup.enter="handleQuery"
+              />
+            </el-form-item>
+            <el-form-item label="业务单号" prop="bizOrderNo">
+              <el-input
+                v-model="queryParams.bizOrderNo"
+                placeholder="请输入业务单号"
+                clearable
+                @keyup.enter="handleQuery"
+              />
+            </el-form-item>
+          </div>
+        </el-collapse-transition>
       </el-form>
+    </el-card>
+
+    <el-card class="mobile-only mobile-search-card">
+      <div class="mobile-search-bar">
+        <el-input
+          v-model="queryParams.keyword"
+          clearable
+          size="large"
+          placeholder="搜索入库单号或业务单号"
+          @keyup.enter="handleQuery"
+        >
+          <template #prefix><el-icon><Search /></el-icon></template>
+        </el-input>
+        <el-button type="primary" size="large" @click="handleQuery">搜索</el-button>
+      </div>
+      <div class="mobile-filter-row">
+        <el-select v-model="queryParams.orderStatus" @change="handleQuery">
+          <el-option label="全部状态" :value="-2" />
+          <el-option v-for="item in wms_receipt_status" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="queryParams.optType" @change="handleQuery">
+          <el-option label="全部类型" :value="-1" />
+          <el-option v-for="item in wms_receipt_type" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+      </div>
     </el-card>
 
     <el-card class="mt20">
@@ -74,7 +109,7 @@
         </el-col>
       </el-row>
 
-      <el-table v-loading="loading" :data="receiptOrderList" border  stripe class="mt20"
+      <el-table v-loading="loading" :data="receiptOrderList" border stripe class="mt20 desktop-only"
                 @expand-change="handleExpandExchange"
                 :row-key="getRowKey"
                 :expand-row-keys="expandedRowKeys"
@@ -108,6 +143,8 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <h3>补充图片</h3>
+              <order-image-gallery :image-ids="props.row.supplementImageIds" />
             </div>
           </template>
         </el-table-column>
@@ -201,6 +238,32 @@
         </el-table-column>
       </el-table>
 
+      <div v-loading="loading" class="mobile-only mobile-order-list">
+        <div v-for="row in receiptOrderList" :key="row.id" class="mobile-order-card">
+          <div class="mobile-order-card__header">
+            <span>{{ row.orderNo }}</span>
+            <dict-tag :options="wms_receipt_status" :value="row.orderStatus" />
+          </div>
+          <div v-if="row.bizOrderNo" class="mobile-order-card__row"><span>业务单号</span><strong>{{ row.bizOrderNo }}</strong></div>
+          <div class="mobile-order-card__row"><span>仓库</span><span>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName || '-' }}</span></div>
+          <div class="mobile-order-card__row"><span>供应商</span><span>{{ useWmsStore().merchantMap.get(row.merchantId)?.merchantName || '-' }}</span></div>
+          <div class="mobile-order-card__row"><span>数量 / 金额</span><span>{{ Number(row.totalQuantity || 0).toFixed(0) }} / {{ row.totalAmount ?? '-' }}</span></div>
+          <div class="mobile-order-card__row"><span>创建时间</span><span>{{ parseTime(row.createTime, '{mm}-{dd} {hh}:{ii}') }}</span></div>
+          <div class="mobile-order-card__actions">
+            <el-button @click="handleGoDetail(row)">{{ expandedRowKeys.includes(row.id) ? '收起' : '查看' }}</el-button>
+            <el-button type="primary" :disabled="[-1, 1].includes(row.orderStatus)" @click="handleUpdate(row)">继续入库</el-button>
+          </div>
+          <div v-if="expandedRowKeys.includes(row.id)" class="mobile-detail-panel">
+            <div v-for="detail in row.details || []" :key="detail.id" class="mobile-detail-item">
+              <strong>{{ detail.item?.itemName }} / {{ detail.itemSku?.skuName }}</strong>
+              <div class="mobile-order-card__row"><span>数量</span><span>{{ Number(detail.quantity || 0).toFixed(0) }}</span></div>
+            </div>
+            <order-image-gallery :image-ids="row.supplementImageIds" />
+          </div>
+        </div>
+        <el-empty v-if="!loading && !receiptOrderList.length" description="没有找到入库单" />
+      </div>
+
       <el-row>
         <pagination
           v-show="total>0"
@@ -221,6 +284,7 @@ import {useWmsStore} from "../../../../store/modules/wms";
 import {listByReceiptOrderId} from "@/api/wms/receiptOrderDetail";
 import {ElMessageBox} from "element-plus";
 import receiptPanel from "@/components/PrintTemplate/receipt-panel";
+import OrderImageGallery from "@/components/OrderImageGallery";
 
 const { proxy } = getCurrentInstance();
 const { wms_receipt_status, wms_receipt_type } = proxy.useDict("wms_receipt_status", "wms_receipt_type");
@@ -235,6 +299,8 @@ const title = ref("");
 const expandedRowKeys = ref([])
 // 商品明细table的loading状态集合
 const detailLoading = ref([])
+// 高级搜索面板是否展开（默认仅显示综合搜索）
+const advancedSearchVisible = ref(false)
 const data = reactive({
   queryParams: {
     pageNum: 1,
@@ -245,6 +311,7 @@ const data = reactive({
     bizOrderNo: undefined,
     totalAmount: undefined,
     orderStatus: -2,
+    keyword: undefined,
   },
 });
 
@@ -280,6 +347,10 @@ function handleQuery() {
 /** 重置按钮操作 */
 function resetQuery() {
   proxy.resetForm("queryRef");
+  // 综合搜索输入框无 prop，需手动清空
+  queryParams.value.keyword = undefined;
+  queryParams.value.orderStatus = -2;
+  queryParams.value.optType = -1;
   handleQuery();
 }
 

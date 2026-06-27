@@ -55,5 +55,10 @@ public class BaseOrderVo<T extends BaseOrderDetailVo> extends BaseVo {
     @ExcelProperty(value = "备注")
     private String remark;
 
+    /**
+     * 补充图片 OSS ID，多个用逗号分隔
+     */
+    private String supplementImageIds;
+
     private List<T> details;
 }

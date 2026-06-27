@@ -22,6 +22,7 @@ import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.wms.domain.bo.ItemSkuBo;
 import com.ruoyi.wms.domain.entity.ItemSku;
+import com.ruoyi.wms.utils.KeywordUtils;
 import com.ruoyi.wms.domain.vo.BaseOrderDetailVo;
 import com.ruoyi.wms.domain.vo.ItemSkuMapVo;
 import com.ruoyi.wms.domain.vo.ItemSkuVo;
@@ -61,8 +62,8 @@ public class ItemSkuService extends ServiceImpl<ItemSkuMapper, ItemSku> {
      */
 
     public TableDataInfo<ItemSkuMapVo> queryPageList(ItemSkuBo bo, PageQuery pageQuery, String itemKeywords) {
-        //开始查sku
-        IPage<ItemSkuMapVo> result = itemSkuMapper.selectByBo(pageQuery.build(), bo, itemKeywords);
+        //开始查sku（归一化关键字：合并空白、中文↔非中文边界自动分词）
+        IPage<ItemSkuMapVo> result = itemSkuMapper.selectByBo(pageQuery.build(), bo, KeywordUtils.splitWordGroups(itemKeywords));
         // 填充每个商品的标签
         List<ItemSkuMapVo> records = result.getRecords();
         if (CollUtil.isNotEmpty(records)) {

@@ -2,6 +2,7 @@
   <div class="navbar">
     <hamburger id="hamburger-container" :is-active="appStore.sidebar.opened" class="hamburger-container" @toggleClick="toggleSideBar" />
     <breadcrumb id="breadcrumb-container" class="breadcrumb-container" v-if="!settingsStore.topNav" />
+    <div class="mobile-title">{{ route.meta.title || '仓库管理' }}</div>
     <top-nav id="topmenu-container" class="topmenu-container" v-if="settingsStore.topNav" />
 
     <div class="right-menu">
@@ -45,6 +46,7 @@ import useSettingsStore from '@/store/modules/settings'
 const appStore = useAppStore()
 const userStore = useUserStore()
 const settingsStore = useSettingsStore()
+const route = useRoute()
 
 function toggleSideBar() {
   appStore.toggleSideBar()
@@ -110,6 +112,10 @@ function setLayout() {
     left: 50px;
   }
 
+  .mobile-title {
+    display: none;
+  }
+
   .errLog-container {
     display: inline-block;
     vertical-align: top;
@@ -165,6 +171,42 @@ function setLayout() {
           font-size: 12px;
         }
       }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    background: #fff;
+    box-shadow: 0 1px 8px rgba(31, 45, 61, 0.08);
+
+    .breadcrumb-container,
+    .topmenu-container {
+      display: none;
+    }
+
+    .mobile-title {
+      display: block;
+      position: absolute;
+      left: 50%;
+      max-width: 55%;
+      line-height: 50px;
+      overflow: hidden;
+      color: var(--el-text-color-primary);
+      font-size: 16px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transform: translateX(-50%);
+    }
+
+    .right-menu .avatar-container {
+      margin-right: 14px;
+    }
+
+    .right-menu .avatar-container .avatar-wrapper .user-avatar {
+      width: 34px;
+      height: 34px;
     }
   }
 }

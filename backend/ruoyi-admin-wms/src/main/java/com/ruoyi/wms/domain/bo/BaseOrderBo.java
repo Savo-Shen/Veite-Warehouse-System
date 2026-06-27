@@ -15,6 +15,11 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 public class BaseOrderBo<T extends BaseOrderDetailBo> extends BaseEntity {
     /**
+     * 手机端快捷搜索：匹配系统单号或业务单号
+     */
+    private String keyword;
+
+    /**
      *
      */
     @NotNull(message = "不能为空", groups = { EditGroup.class })
@@ -45,6 +50,11 @@ public class BaseOrderBo<T extends BaseOrderDetailBo> extends BaseEntity {
      * 备注
      */
     private String remark;
+
+    /**
+     * 补充图片 OSS ID，多个用逗号分隔
+     */
+    private String supplementImageIds;
 
     /**
      * 商品信息

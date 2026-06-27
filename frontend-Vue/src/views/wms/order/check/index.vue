@@ -1,36 +1,46 @@
 <template>
   <div class="app-container">
     <el-card>
-      <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="70px">
-        <el-form-item label="盘库状态" prop="orderStatus">
-          <el-radio-group v-model="queryParams.orderStatus" @change="handleQuery">
-            <el-radio-button
-              :key="-2"
-              :label="-2"
-            >
-              全部
-            </el-radio-button>
-            <el-radio-button
-              v-for="item in wms_check_status"
-              :key="item.value"
-              :label="item.value"
-            >
-              {{ item.label }}
-            </el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="盘库单号" prop="orderNo">
-          <el-input
-            v-model="queryParams.orderNo"
-            placeholder="请输入盘库单号"
-            clearable
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
-          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
-        </el-form-item>
+      <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="70px" @submit.prevent @keyup.enter="handleQuery">
+        <div style="display: flex;">
+          <el-form-item label="综合搜索" style="flex: 1;">
+            <el-input v-model="queryParams.keyword" clearable placeholder="搜索盘库单号 / 备注 / 仓库 / 商品·规格·条码（多个关键字用空格分隔）"/>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+            <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+            <el-button type="text" @click="advancedSearchVisible = !advancedSearchVisible">高级搜索</el-button>
+          </el-form-item>
+        </div>
+        <el-collapse-transition>
+          <div v-if="advancedSearchVisible">
+            <el-form-item label="盘库状态" prop="orderStatus">
+              <el-radio-group v-model="queryParams.orderStatus" @change="handleQuery">
+                <el-radio-button
+                  :key="-2"
+                  :label="-2"
+                >
+                  全部
+                </el-radio-button>
+                <el-radio-button
+                  v-for="item in wms_check_status"
+                  :key="item.value"
+                  :label="item.value"
+                >
+                  {{ item.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="盘库单号" prop="orderNo">
+              <el-input
+                v-model="queryParams.orderNo"
+                placeholder="请输入盘库单号"
+                clearable
+                @keyup.enter="handleQuery"
+              />
+            </el-form-item>
+          </div>
+        </el-collapse-transition>
       </el-form>
     </el-card>
 
@@ -156,10 +166,13 @@ const loading = ref(true);
 const ids = ref([]);
 const total = ref(0);
 const title = ref("");
+// 高级搜索面板是否展开（默认仅显示综合搜索）
+const advancedSearchVisible = ref(false)
 const data = reactive({
   queryParams: {
     pageNum: 1,
     pageSize: 10,
+    keyword: undefined,
     orderNo: undefined,
     orderStatus: -2,
   },
@@ -194,6 +207,9 @@ function handleQuery() {
 /** 重置按钮操作 */
 function resetQuery() {
   proxy.resetForm("queryRef");
+  // 综合搜索输入框无 prop，需手动清空
+  queryParams.value.keyword = undefined;
+  queryParams.value.orderStatus = -2;
   handleQuery();
 }
 

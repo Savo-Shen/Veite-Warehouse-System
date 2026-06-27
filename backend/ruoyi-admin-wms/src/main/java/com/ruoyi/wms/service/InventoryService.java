@@ -21,6 +21,7 @@ import com.ruoyi.wms.domain.vo.InventoryVo;
 import com.ruoyi.wms.domain.vo.ItemSkuMapVo;
 import com.ruoyi.wms.mapper.InventoryMapper;
 import com.ruoyi.wms.mapper.WarehouseMapper;
+import com.ruoyi.wms.utils.KeywordUtils;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -121,11 +122,11 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
     }
 
     public TableDataInfo<InventoryVo> queryWarehouseBoardList(InventoryBo bo, PageQuery pageQuery, String itemKeywords) {
-            return TableDataInfo.build(inventoryMapper.queryWarehouseBoardList(pageQuery.build(), bo, itemKeywords));
+            return TableDataInfo.build(inventoryMapper.queryWarehouseBoardList(pageQuery.build(), bo, KeywordUtils.splitWordGroups(itemKeywords)));
     }
 
     public TableDataInfo<InventoryVo> queryItemBoardList(InventoryBo bo, PageQuery pageQuery, String itemKeywords) {
-        Page<InventoryVo> result = inventoryMapper.queryItemBoardList(pageQuery.build(), bo, itemKeywords);
+        Page<InventoryVo> result = inventoryMapper.queryItemBoardList(pageQuery.build(), bo, KeywordUtils.splitWordGroups(itemKeywords));
         return TableDataInfo.build(result);
     }
 
@@ -140,7 +141,7 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
      * @param ids          勾选的库存 id（可为空）
      */
     public List<InventoryExportVo> queryExportList(InventoryBo bo, String itemKeywords, Collection<Long> ids) {
-        List<InventoryVo> list = inventoryMapper.queryExportList(bo, itemKeywords);
+        List<InventoryVo> list = inventoryMapper.queryExportList(bo, KeywordUtils.splitWordGroups(itemKeywords));
         if (CollUtil.isEmpty(list)) {
             return Collections.emptyList();
         }

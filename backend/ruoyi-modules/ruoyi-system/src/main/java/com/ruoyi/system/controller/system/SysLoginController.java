@@ -108,6 +108,17 @@ public class SysLoginController {
     }
 
     /**
+     * 续期当前设备登录状态。
+     *
+     * @return 新的有效期（秒）
+     */
+    @PostMapping("/renewToken")
+    public R<Map<String, Object>> renewToken() {
+        long expiresIn = LoginHelper.renewRememberDevice();
+        return R.ok(Map.of("expiresIn", expiresIn));
+    }
+
+    /**
      * 获取用户信息
      *
      * @return 用户信息

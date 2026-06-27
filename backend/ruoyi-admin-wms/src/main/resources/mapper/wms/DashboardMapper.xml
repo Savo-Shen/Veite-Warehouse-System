@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.DashboardMapper">
+
+    <select id="selectSummary" resultType="java.util.LinkedHashMap">
+        select
+            (select count(1) from wms_warehouse) as warehouseCount,
+            (select count(1) from wms_location) as locationCount,
+            (select count(1) from wms_item) as itemCount,
+            (select count(1) from wms_item_sku) as skuCount,
+            coalesce((select sum(quantity) from wms_inventory), 0) as totalStockQuantity,
+            coalesce((
+                select sum(inv.quantity * coalesce(sku.selling_price, 0))
+                from wms_inventory inv
+                inner join wms_item_sku sku on inv.sku_id = sku.id
+            ), 0) as stockSellingValue,
+            coalesce((
+                select sum(inv.quantity * coalesce(sku.cost_price, 0))
+                from wms_inventory inv
+                inner join wms_item_sku sku on inv.sku_id = sku.id
+            ), 0) as stockCostValue,
+            coalesce((
+                select sum(total_amount)
+                from wms_shipment_order
+                where order_status = 1 and date(create_time) = curdate()
+            ), 0) as todayTurnover,
+            coalesce((
+                select sum(total_amount)
+                from wms_receipt_order
+                where order_status = 1 and date(create_time) = curdate()
+            ), 0) as todayReceiptAmount,
+            coalesce((
+                select sum(total_quantity)
+                from wms_shipment_order
+                where order_status = 1 and date(create_time) = curdate()
+            ), 0) as todayShipmentQuantity,
+            coalesce((
+                select sum(total_quantity)
+                from wms_receipt_order
+                where order_status = 1 and date(create_time) = curdate()
+            ), 0) as todayReceiptQuantity,
+            (select count(1) from wms_shipment_order where order_status = 1 and date(create_time) = curdate()) as todayShipmentOrders,
+            (select count(1) from wms_receipt_order where order_status = 1 and date(create_time) = curdate()) as todayReceiptOrders,
+            (select count(1) from wms_shipment_order where order_status = 0) as pendingShipmentOrders,
+            (select count(1) from wms_receipt_order where order_status = 0) as pendingReceiptOrders,
+            coalesce((
+                select count(1)
+                from (
+                    select sku_id, sum(quantity) as quantity
+                    from wms_inventory
+                    group by sku_id
+                    having quantity &gt; 0 and quantity &lt;= 5
+                ) low_stock
+            ), 0) as lowStockSkuCount,
+            coalesce((
+                select count(1)
+                from (
+                    select sku_id, sum(quantity) as quantity
+                    from wms_inventory
+                    group by sku_id
+                    having quantity = 0
+                ) empty_stock
+            ), 0) as emptyStockSkuCount
+    </select>
+
+    <select id="selectDailyTrend" resultType="java.util.LinkedHashMap">
+        select
+            day,
+            sum(receiptOrders) as receiptOrders,
+            sum(shipmentOrders) as shipmentOrders,
+            sum(receiptQuantity) as receiptQuantity,
+            sum(shipmentQuantity) as shipmentQuantity,
+            sum(receiptAmount) as receiptAmount,
+            sum(turnover) as turnover
+        from (
+            select
+                date(create_time) as day,
+                count(1) as receiptOrders,
+                0 as shipmentOrders,
+                coalesce(sum(total_quantity), 0) as receiptQuantity,
+                0 as shipmentQuantity,
+                coalesce(sum(total_amount), 0) as receiptAmount,
+                0 as turnover
+            from wms_receipt_order
+            where order_status = 1
+              and create_time &gt;= date_sub(curdate(), interval (#{days} - 1) day)
+            group by date(create_time)
+            union all
+            select
+                date(create_time) as day,
+                0 as receiptOrders,
+                count(1) as shipmentOrders,
+                0 as receiptQuantity,
+                coalesce(sum(total_quantity), 0) as shipmentQuantity,
+                0 as receiptAmount,
+                coalesce(sum(total_amount), 0) as turnover
+            from wms_shipment_order
+            where order_status = 1
+              and create_time &gt;= date_sub(curdate(), interval (#{days} - 1) day)
+            group by date(create_time)
+        ) daily
+        group by day
+        order by day
+    </select>
+
+    <select id="selectWarehouseStock" resultType="java.util.LinkedHashMap">
+        select
+            wh.id as warehouseId,
+            wh.warehouse_name as warehouseName,
+            coalesce(sum(inv.quantity), 0) as quantity,
+            coalesce(sum(inv.quantity * coalesce(sku.selling_price, 0)), 0) as sellingValue,
+            coalesce(sum(inv.quantity * coalesce(sku.cost_price, 0)), 0) as costValue
+        from wms_warehouse wh
+        left join wms_inventory inv on inv.warehouse_id = wh.id
+        left join wms_item_sku sku on inv.sku_id = sku.id
+        group by wh.id, wh.warehouse_name
+        order by quantity desc
+    </select>
+
+    <select id="selectTopShipmentSku" resultType="java.util.LinkedHashMap">
+        select
+            sku.id as skuId,
+            item.item_name as itemName,
+            sku.sku_name as skuName,
+            coalesce(sum(detail.quantity), 0) as quantity,
+            coalesce(sum(detail.amount), 0) as amount
+        from wms_shipment_order_detail detail
+        inner join wms_shipment_order orders on detail.order_id = orders.id
+        inner join wms_item_sku sku on detail.sku_id = sku.id
+        inner join wms_item item on sku.item_id = item.id
+        where orders.order_status = 1
+          and orders.create_time &gt;= date_sub(curdate(), interval #{days} day)
+        group by sku.id, item.item_name, sku.sku_name
+        order by quantity desc
+        limit #{limit}
+    </select>
+
+    <select id="selectLowStockSku" resultType="java.util.LinkedHashMap">
+        select
+            sku.id as skuId,
+            item.item_name as itemName,
+            sku.sku_name as skuName,
+            coalesce(sum(inv.quantity), 0) as quantity,
+            coalesce(max(loc.location_code), '-') as locationCode
+        from wms_inventory inv
+        inner join wms_item_sku sku on inv.sku_id = sku.id
+        inner join wms_item item on sku.item_id = item.id
+        left join wms_location loc on sku.item_location_id = loc.id
+        group by sku.id, item.item_name, sku.sku_name
+        having quantity &gt;= 0 and quantity &lt;= 5
+        order by quantity asc, item.item_name asc
+        limit #{limit}
+    </select>
+</mapper>

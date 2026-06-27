@@ -13,6 +13,7 @@ import com.ruoyi.wms.domain.bo.InventoryHistoryBo;
 import com.ruoyi.wms.domain.entity.InventoryHistory;
 import com.ruoyi.wms.domain.vo.InventoryHistoryVo;
 import com.ruoyi.wms.mapper.InventoryHistoryMapper;
+import com.ruoyi.wms.utils.KeywordUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -66,6 +67,8 @@ public class InventoryHistoryService extends ServiceImpl<InventoryHistoryMapper,
      * 查询库存记录列表
      */
     public TableDataInfo<InventoryHistoryVo> queryPageList(InventoryHistoryBo bo, PageQuery pageQuery) {
+        // 归一化综合搜索关键字：去除首尾空白、合并连续空白（含全角空格）
+        bo.setKeyword(KeywordUtils.normalize(bo.getKeyword()));
         Page<InventoryHistoryVo> result = inventoryHistoryMapper.selectVoPageByBo(pageQuery.build(), bo);
         return TableDataInfo.build(result);
     }
