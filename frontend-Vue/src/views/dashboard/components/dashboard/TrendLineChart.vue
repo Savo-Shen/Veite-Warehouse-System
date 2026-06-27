@@ -24,6 +24,10 @@ const props = defineProps({
     type: String,
     default: 'kM·h'
   },
+  seriesName: {
+    type: String,
+    default: '数据'
+  },
   barColor: {
     type: Array,
     default: () => {
@@ -81,6 +85,17 @@ function initChart() {
       borderColor: '#2969e8',
       textStyle: {
         color: '#fff'
+      },
+      formatter: (params) => {
+        const row = Array.isArray(params) ? params[0] : params
+        if (!row) {
+          return ''
+        }
+        const value = Number(row.value || 0).toLocaleString('zh-CN', {
+          minimumFractionDigits: props.yName === '元' ? 2 : 0,
+          maximumFractionDigits: props.yName === '元' ? 2 : 0
+        })
+        return `${row.axisValue}<br/>${props.seriesName}：${value}${props.yName}`
       }
     },
     grid: {
@@ -140,7 +155,7 @@ function initChart() {
       }
     }],
     series: [{
-      // name: 'pageA',
+      name: props.seriesName,
       type: 'line',
       stack: 'vistors',
       barWidth: '50%',

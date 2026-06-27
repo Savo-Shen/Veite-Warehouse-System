@@ -8,7 +8,7 @@
     <div class="board-content flex-between">
       <div class="content-left flex-column-between">
         <section class="panel inventory-overview">
-          <div class="box-title">库存总览</div>
+          <div class="box-title">近 {{ TREND_DAYS }} 天经营</div>
           <div class="overview-grid">
             <div v-for="item in overviewCards" :key="item.label" class="overview-card">
               <strong>{{ item.value }}</strong>
@@ -18,8 +18,12 @@
         </section>
 
         <section class="panel">
-          <div class="box-title">库存价值</div>
+          <div class="box-title">库存快照</div>
           <div class="value-list">
+            <div>
+              <span>当前库存</span>
+              <strong>{{ integer(summary.totalStockQuantity) }} 件</strong>
+            </div>
             <div>
               <span>按售价估值</span>
               <strong>{{ money(summary.stockSellingValue) }}</strong>
@@ -27,6 +31,10 @@
             <div>
               <span>按成本估值</span>
               <strong>{{ money(summary.stockCostValue) }}</strong>
+            </div>
+            <div>
+              <span>商品 / SKU</span>
+              <strong>{{ integer(summary.itemCount) }} / {{ integer(summary.skuCount) }}</strong>
             </div>
           </div>
         </section>
@@ -70,11 +78,12 @@
         </section>
 
         <section class="panel trend-panel">
-          <div class="box-title">近 14 天营业额趋势</div>
+          <div class="box-title">近 {{ TREND_DAYS }} 天营业额趋势</div>
           <div class="box-content">
             <TrendLineChart
               :height="'100%'"
               yName="元"
+              seriesName="营业额"
               :xData="trendX"
               :yData="turnoverTrend"
             />
@@ -106,7 +115,7 @@
         </section>
 
         <section class="panel">
-          <div class="box-title">近 14 天出入库件数</div>
+          <div class="box-title">近 {{ TREND_DAYS }} 天出库件数</div>
           <div class="mini-chart">
             <barChart
               :height="'100%'"
@@ -146,6 +155,7 @@ import { useRouter } from 'vue-router'
 import { getDashboardOverview } from '@/api/wms/dashboard'
 
 const router = useRouter()
+const TREND_DAYS = 14
 const loading = ref(false)
 const nowTime = ref()
 const timer = ref()
@@ -159,12 +169,27 @@ const showWhich = computed(() => router.currentRoute.value.path === '/system/das
 const trendX = computed(() => dailyTrend.value.map(item => moment(item.day).format('MM-DD')))
 const turnoverTrend = computed(() => dailyTrend.value.map(item => Number(item.turnover || 0).toFixed(2)))
 const shipmentQuantityTrend = computed(() => dailyTrend.value.map(item => Number(item.shipmentQuantity || 0).toFixed(0)))
+const trendTotals = computed(() => dailyTrend.value.reduce((totals, row) => ({
+  turnover: totals.turnover + Number(row.turnover || 0),
+  receiptAmount: totals.receiptAmount + Number(row.receiptAmount || 0),
+  shipmentOrders: totals.shipmentOrders + Number(row.shipmentOrders || 0),
+  receiptOrders: totals.receiptOrders + Number(row.receiptOrders || 0),
+  shipmentQuantity: totals.shipmentQuantity + Number(row.shipmentQuantity || 0),
+  receiptQuantity: totals.receiptQuantity + Number(row.receiptQuantity || 0)
+}), {
+  turnover: 0,
+  receiptAmount: 0,
+  shipmentOrders: 0,
+  receiptOrders: 0,
+  shipmentQuantity: 0,
+  receiptQuantity: 0
+}))
 const overviewCards = computed(() => [
-  { label: '仓库数', value: integer(summary.value.warehouseCount) },
-  { label: '库位数', value: integer(summary.value.locationCount) },
-  { label: '商品数', value: integer(summary.value.itemCount) },
-  { label: 'SKU 数', value: integer(summary.value.skuCount) },
-  { label: '库存件数', value: integer(summary.value.totalStockQuantity) },
+  { label: '营业额', value: money(trendTotals.value.turnover) },
+  { label: '出库单', value: integer(trendTotals.value.shipmentOrders) },
+  { label: '出库件数', value: integer(trendTotals.value.shipmentQuantity) },
+  { label: '入库单', value: integer(trendTotals.value.receiptOrders) },
+  { label: '入库件数', value: integer(trendTotals.value.receiptQuantity) },
   { label: '低库存', value: integer(summary.value.lowStockSkuCount) }
 ])
 
@@ -192,7 +217,7 @@ function integer(value) {
 function fillTrend(rows) {
   const map = new Map((rows || []).map(item => [moment(item.day).format('YYYY-MM-DD'), item]))
   const days = []
-  for (let i = 13; i >= 0; i--) {
+  for (let i = TREND_DAYS - 1; i >= 0; i--) {
     const day = moment().subtract(i, 'days').format('YYYY-MM-DD')
     days.push({
       day,
@@ -326,9 +351,9 @@ onBeforeUnmount(() => {
   padding: 16px;
 }
 
-.content-left .panel:nth-child(1) { height: 28%; }
-.content-left .panel:nth-child(2) { height: calc(22% - 12px); }
-.content-left .panel:nth-child(3) { height: calc(50% - 12px); }
+.content-left .panel:nth-child(1) { height: 30%; }
+.content-left .panel:nth-child(2) { height: calc(28% - 12px); }
+.content-left .panel:nth-child(3) { height: calc(42% - 12px); }
 .content-right .panel:nth-child(1) { height: 25%; }
 .content-right .panel:nth-child(2) { height: calc(32% - 12px); }
 .content-right .panel:nth-child(3) { height: calc(43% - 12px); }
@@ -395,8 +420,10 @@ onBeforeUnmount(() => {
 .overview-card strong,
 .stat-grid strong {
   color: #1be5e7;
-  font-size: 23px;
+  font-size: 22px;
   line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overview-card span,
@@ -412,6 +439,7 @@ onBeforeUnmount(() => {
 
 .value-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   height: calc(100% - 28px);
   padding-top: 10px;
@@ -420,7 +448,8 @@ onBeforeUnmount(() => {
 .value-list strong {
   margin-top: 3px;
   color: #ffd166;
-  font-size: 21px;
+  font-size: 18px;
+  line-height: 1.15;
 }
 
 .hero-main {

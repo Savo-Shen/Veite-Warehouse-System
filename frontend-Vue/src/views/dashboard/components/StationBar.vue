@@ -38,8 +38,12 @@ const props = defineProps({
   setting: {
     type: Object,
     default: () => {
-      return {seriesName: '充电订单数量', yName: ''}
+      return {seriesName: '数据', yName: ''}
     }
+  },
+  tooltipUnit: {
+    type: String,
+    default: ''
   },
   chartData: {
     type: Object,
@@ -78,11 +82,17 @@ function initChart() {
       axisPointer: { // 坐标轴指示器，坐标轴触发有效
         type: 'shadow' // 默认为直线，可选为：'line' | 'shadow'
       },
-      // backgroundColor: 'rgba(28, 37, 80, 0.9)',
-      // borderColor: '#2969e8',
-      // textStyle: {
-      //   color: '#fff'
-      // }
+      formatter: (params) => {
+        const row = Array.isArray(params) ? params[0] : params
+        if (!row) {
+          return ''
+        }
+        const value = Number(row.value || 0).toLocaleString('zh-CN', {
+          minimumFractionDigits: props.tooltipUnit === '元' ? 2 : 0,
+          maximumFractionDigits: props.tooltipUnit === '元' ? 2 : 0
+        })
+        return `${row.axisValue}<br/>${props.setting.seriesName || '数据'}：${value}${props.tooltipUnit}`
+      }
     },
     grid: {
       top: '15%',
@@ -172,4 +182,5 @@ watch(()=>props.chartData, (value) => {
     initChart();
   });
 })
+
 </script>
