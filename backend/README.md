@@ -2,9 +2,33 @@
 
 ## 手动运行
 
-`cd backend/ruoyi-admin-wms`
+推荐从 `backend` 目录启动，让脚本先加载 `backend/.env`，避免 AI 助手拿不到 `WMS_AI_API_KEY`。
 
-`mvn clean spring-boot:run`
+macOS / Linux：
+
+`cd backend`
+
+`sh dev-start.sh`
+
+Windows PowerShell：
+
+`cd backend`
+
+`powershell -ExecutionPolicy Bypass -File .\dev-start.ps1`
+
+如果不走脚本，也可以手动把密钥设进当前终端环境变量后再启动：
+
+macOS / Linux：
+
+`export WMS_AI_API_KEY=sk-xxx`
+
+`mvn spring-boot:run -pl ruoyi-admin-wms`
+
+Windows PowerShell：
+
+`$env:WMS_AI_API_KEY="sk-xxx"`
+
+`mvn spring-boot:run -pl ruoyi-admin-wms`
 
 ## 热重载 (Hot Reload)
 
@@ -62,4 +86,3 @@ Java 扩展默认保存即编译到 `target/classes`，一般保存后即可自�
 ## 打包
 
 `mvn clean package`
-

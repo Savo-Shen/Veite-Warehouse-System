@@ -26,8 +26,14 @@
     <el-row :gutter="14">
       <el-col :xs="24" :lg="16">
         <el-card shadow="never" class="panel-card">
-          <div class="card-title">近 14 天营业额</div>
-          <StationBar height="310px" :chartData="turnoverChart" xName="日" />
+          <div class="card-title">近 {{ TREND_DAYS }} 天营业额</div>
+          <StationBar
+            height="310px"
+            :chartData="turnoverChart"
+            :setting="{ seriesName: '营业额', yName: '元' }"
+            tooltip-unit="元"
+            xName="日"
+          />
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="8">
@@ -58,8 +64,12 @@
     <el-row :gutter="14">
       <el-col :xs="24" :lg="8">
         <el-card shadow="never" class="panel-card">
-          <div class="card-title">库存价值</div>
+          <div class="card-title">库存快照</div>
           <div class="value-stack">
+            <div>
+              <span>当前库存</span>
+              <strong>{{ integer(summary.totalStockQuantity) }} 件</strong>
+            </div>
             <div>
               <span>按售价估值</span>
               <strong>{{ money(summary.stockSellingValue) }}</strong>
@@ -69,8 +79,8 @@
               <strong>{{ money(summary.stockCostValue) }}</strong>
             </div>
             <div>
-              <span>当前库存</span>
-              <strong>{{ integer(summary.totalStockQuantity) }} 件</strong>
+              <span>商品 / SKU</span>
+              <strong>{{ integer(summary.itemCount) }} / {{ integer(summary.skuCount) }}</strong>
             </div>
           </div>
         </el-card>
@@ -118,6 +128,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDashboardOverview } from '@/api/wms/dashboard'
 
+const TREND_DAYS = 14
 const router = useRouter()
 const loading = ref(false)
 const summary = ref({})
@@ -125,11 +136,27 @@ const dailyTrend = ref([])
 const topShipmentSku = ref([])
 const lowStockSku = ref([])
 
+const trendTotals = computed(() => dailyTrend.value.reduce((totals, row) => ({
+  turnover: totals.turnover + Number(row.turnover || 0),
+  receiptAmount: totals.receiptAmount + Number(row.receiptAmount || 0),
+  shipmentOrders: totals.shipmentOrders + Number(row.shipmentOrders || 0),
+  receiptOrders: totals.receiptOrders + Number(row.receiptOrders || 0),
+  shipmentQuantity: totals.shipmentQuantity + Number(row.shipmentQuantity || 0),
+  receiptQuantity: totals.receiptQuantity + Number(row.receiptQuantity || 0)
+}), {
+  turnover: 0,
+  receiptAmount: 0,
+  shipmentOrders: 0,
+  receiptOrders: 0,
+  shipmentQuantity: 0,
+  receiptQuantity: 0
+}))
+
 const metricCards = computed(() => [
-  { label: '今日出库', value: `${integer(summary.value.todayShipmentOrders)} 单 / ${integer(summary.value.todayShipmentQuantity)} 件`, short: '出', type: 'blue' },
-  { label: '今日入库', value: `${integer(summary.value.todayReceiptOrders)} 单 / ${integer(summary.value.todayReceiptQuantity)} 件`, short: '入', type: 'green' },
-  { label: '库存件数', value: `${integer(summary.value.totalStockQuantity)} 件`, short: '库', type: 'purple' },
-  { label: '商品 / SKU', value: `${integer(summary.value.itemCount)} / ${integer(summary.value.skuCount)}`, short: '品', type: 'orange' }
+  { label: `近 ${TREND_DAYS} 天营业额`, value: money(trendTotals.value.turnover), short: '额', type: 'blue' },
+  { label: `近 ${TREND_DAYS} 天出库`, value: `${integer(trendTotals.value.shipmentOrders)} 单 / ${integer(trendTotals.value.shipmentQuantity)} 件`, short: '出', type: 'green' },
+  { label: `近 ${TREND_DAYS} 天入库`, value: `${integer(trendTotals.value.receiptOrders)} 单 / ${integer(trendTotals.value.receiptQuantity)} 件`, short: '入', type: 'purple' },
+  { label: '待处理单据', value: `${integer(summary.value.pendingReceiptOrders)} 入 / ${integer(summary.value.pendingShipmentOrders)} 出`, short: '待', type: 'orange' }
 ])
 
 const turnoverChart = computed(() => ({
@@ -149,7 +176,7 @@ function integer(value) {
 function fillTrend(rows) {
   const map = new Map((rows || []).map(item => [moment(item.day).format('YYYY-MM-DD'), item]))
   const days = []
-  for (let i = 13; i >= 0; i--) {
+  for (let i = TREND_DAYS - 1; i >= 0; i--) {
     const day = moment().subtract(i, 'days').format('YYYY-MM-DD')
     days.push({
       day,

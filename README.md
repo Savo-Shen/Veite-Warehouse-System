@@ -7,7 +7,9 @@
 ### 启动脚本
 
 - **macOS/Linux**: `./system.sh` 或 `./dev-start.sh`
-- **Windows**: `system.bat`
+- **Windows**: `system.bat` 或 `powershell -ExecutionPolicy Bypass -File .\dev-start.ps1`
+
+> 开发时更推荐 `dev-start.sh` / `dev-start.ps1`，它会加载 `backend/.env`，并且按 `Ctrl+C` 会同时关闭前端和后端。
 
 #### 脚本使用说明
 

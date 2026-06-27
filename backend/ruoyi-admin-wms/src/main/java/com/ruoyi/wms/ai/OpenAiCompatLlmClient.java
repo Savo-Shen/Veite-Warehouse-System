@@ -62,7 +62,7 @@ public class OpenAiCompatLlmClient implements LlmClient {
         }
         if (keyMissing) {
             throw new ServiceException("AI 密钥未注入：base-url 已读到(" + props.getBaseUrl()
-                + ")，但 WMS_AI_API_KEY 为空。请用 dev-start.sh 重启后端（IDE 启动不会加载 .env），或把密钥设进启动环境变量");
+                + ")，但 WMS_AI_API_KEY 为空。请在 backend 目录用 dev-start.sh / dev-start.ps1 启动后端，或把密钥设进当前启动环境变量");
         }
 
         Map<String, Object> body = new LinkedHashMap<>();
