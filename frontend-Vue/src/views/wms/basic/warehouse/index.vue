@@ -18,6 +18,12 @@
       <el-table v-loading="loading" :data="warehouseList" border stripe class="mt20" empty-text="暂无品牌">
         <el-table-column label="仓库名称" prop="warehouseName" />
         <el-table-column label="仓库编号" prop="warehouseCode" />
+        <el-table-column label="地址" prop="address" show-overflow-tooltip>
+          <template #default="scope">
+            <el-icon v-if="scope.row.longitude && scope.row.latitude" color="#67C23A" style="vertical-align: -2px; margin-right: 2px"><LocationFilled /></el-icon>
+            {{ scope.row.address }}
+          </template>
+        </el-table-column>
         <el-table-column label="创建时间" prop="createTime" width="180"/>
         <el-table-column label="操作" align="right" class-name="small-padding fixed-width" width="180">
           <template #default="scope">
@@ -37,6 +43,24 @@
         <el-form-item label="编号" prop="warehouseCode">
           <el-input v-model="form.warehouseCode" placeholder="请输入编号" />
         </el-form-item>
+        <el-form-item label="地址" prop="address">
+          <el-input v-model="form.address" placeholder="请输入地址或通过地图选点获取">
+            <template #append>
+              <el-button icon="Location" @click="pickerVisible = true">地图选点</el-button>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="经纬度">
+          <el-input
+            :model-value="form.longitude && form.latitude ? form.longitude + ', ' + form.latitude : ''"
+            readonly
+            placeholder="通过「地图选点」获取，用于在地图总览中标记仓库"
+          >
+            <template #append>
+              <el-button icon="Delete" :disabled="!form.longitude" @click="clearLocation">清除</el-button>
+            </template>
+          </el-input>
+        </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" placeholder="请输入备注" />
         </el-form-item>
@@ -48,6 +72,15 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 地图选点 -->
+    <a-map-picker
+      v-model="pickerVisible"
+      :longitude="form.longitude"
+      :latitude="form.latitude"
+      :address="form.address"
+      @confirm="handlePickLocation"
+    />
   </div>
 </template>
 
@@ -61,6 +94,7 @@ import {
 } from '@/api/wms/warehouse';
 import {getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from 'vue';
 import {ElForm, ElMessageBox, ElTree} from 'element-plus';
+import AMapPicker from '@/components/AMapPicker';
 import useUserStore from "@/store/modules/user";
 import {useWmsStore} from "@/store/modules/wms";
 const wmsStore = useWmsStore();
@@ -90,7 +124,26 @@ const initFormData = {
   id: undefined,
   warehouseCode: undefined,
   warehouseName: undefined,
+  address: undefined,
+  longitude: undefined,
+  latitude: undefined,
   remark: undefined,
+}
+const pickerVisible = ref(false);
+
+/** 地图选点确认 */
+function handlePickLocation({ longitude, latitude, address }) {
+  form.value.longitude = longitude;
+  form.value.latitude = latitude;
+  if (address) {
+    form.value.address = address;
+  }
+}
+
+/** 清除经纬度 */
+function clearLocation() {
+  form.value.longitude = undefined;
+  form.value.latitude = undefined;
 }
 const data = reactive({
   form: {...initFormData},

@@ -10,6 +10,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.math.BigDecimal;
+
 
 /**
  * 往来单位业务对象 wms_merchant
@@ -68,6 +70,16 @@ public class MerchantBo extends BaseEntity {
     private String address;
 
     /**
+     * 经度（GCJ-02）
+     */
+    private BigDecimal longitude;
+
+    /**
+     * 纬度（GCJ-02）
+     */
+    private BigDecimal latitude;
+
+    /**
      * 手机号
      */
     private String mobile;
@@ -91,6 +103,11 @@ public class MerchantBo extends BaseEntity {
      * 备注
      */
     private String remark;
+
+    /**
+     * 单位图片OSS ID，多个用逗号分隔
+     */
+    private String imageIds;
 
 
 }

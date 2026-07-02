@@ -13,6 +13,7 @@ import com.ruoyi.common.core.validate.QueryGroup;
 import com.ruoyi.common.log.enums.BusinessType;
 import com.ruoyi.common.core.exception.ServiceException;
 import com.ruoyi.system.domain.bo.SysOssBo;
+import com.ruoyi.system.domain.entity.SysOssBlob;
 import com.ruoyi.system.domain.vo.SysOssVo;
 import com.ruoyi.system.service.SysOssService;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +93,30 @@ public class SysOssController extends BaseController {
     @GetMapping("/download/{ossId}")
     public void download(@PathVariable Long ossId, HttpServletResponse response) throws IOException {
         sysSssService.download(ossId,response);
+    }
+
+    /**
+     * 读取数据库存储模式下的文件内容（公开访问，供 &lt;img&gt; 等直接加载）
+     * 该路径已在 application.yml 的 security.excludes 中放行匿名访问
+     *
+     * @param ossId OSS对象ID
+     */
+    @GetMapping("/blob/{ossId}")
+    public void blob(@PathVariable Long ossId, HttpServletResponse response) throws IOException {
+        SysOssBlob blob = sysSssService.getBlob(ossId);
+        if (blob == null || blob.getData() == null) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        if (blob.getContentType() != null) {
+            response.setContentType(blob.getContentType());
+        } else {
+            response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        }
+        // 图片等静态资源允许缓存，减少重复请求
+        response.setHeader("Cache-Control", "max-age=31536000");
+        response.setContentLength(blob.getData().length);
+        response.getOutputStream().write(blob.getData());
     }
 
     /**

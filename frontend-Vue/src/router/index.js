@@ -95,6 +95,18 @@ export const constantRoutes = [
     component: Layout,
     children: [
       {
+        path: '/wms/map',
+        component: () => import('@/views/wms/map/index'),
+        name: 'WmsMapOverview',
+        meta: { title: '地图总览', icon: 'international' }
+      }
+    ]
+  },
+  {
+    path: '',
+    component: Layout,
+    children: [
+      {
         path: '/wms/ai',
         component: () => import('@/views/wms/ai/index'),
         name: 'WmsAiAssistant',

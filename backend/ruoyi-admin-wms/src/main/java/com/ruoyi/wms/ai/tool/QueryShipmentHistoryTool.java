@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.wms.domain.bo.ItemSkuBo;
-import com.ruoyi.wms.domain.entity.BaseOrderDetail;
 import com.ruoyi.wms.domain.entity.ShipmentOrder;
 import com.ruoyi.wms.domain.entity.ShipmentOrderDetail;
 import com.ruoyi.wms.domain.vo.ItemSkuMapVo;
@@ -96,15 +95,15 @@ public class QueryShipmentHistoryTool implements AiTool {
         // 2. 反查出库单明细（按时间倒序，取最近若干条）
         List<ShipmentOrderDetail> details = shipmentOrderDetailMapper.selectList(
             Wrappers.<ShipmentOrderDetail>lambdaQuery()
-                .in(BaseOrderDetail::getSkuId, skuIds)
-                .orderByDesc(BaseOrderDetail::getId)
+                .in(ShipmentOrderDetail::getSkuId, skuIds)
+                .orderByDesc(ShipmentOrderDetail::getId)
                 .last("limit " + LIMIT));
         if (details.isEmpty()) {
             return emptyResult("匹配到了商品，但没有它的出库记录。");
         }
 
         // 3. 批量取出库单头（客户、单号、状态、时间）
-        List<Long> orderIds = details.stream().map(BaseOrderDetail::getOrderId).distinct().toList();
+        List<Long> orderIds = details.stream().map(ShipmentOrderDetail::getOrderId).distinct().toList();
         Map<Long, ShipmentOrder> orderMap = shipmentOrderMapper.selectBatchIds(orderIds).stream()
             .collect(Collectors.toMap(ShipmentOrder::getId, o -> o, (a, b) -> a));
 

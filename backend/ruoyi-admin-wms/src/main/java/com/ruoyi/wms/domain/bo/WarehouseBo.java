@@ -10,6 +10,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import com.ruoyi.wms.domain.entity.Warehouse;
 
+import java.math.BigDecimal;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 @AutoMapper(target = Warehouse.class, reverseConvertGenerate = false)
@@ -31,6 +33,21 @@ public class WarehouseBo extends BaseEntity {
      */
     @NotBlank(message = "名称不能为空", groups = { AddGroup.class, EditGroup.class })
     private String warehouseName;
+
+    /**
+     * 地址
+     */
+    private String address;
+
+    /**
+     * 经度（GCJ-02）
+     */
+    private BigDecimal longitude;
+
+    /**
+     * 纬度（GCJ-02）
+     */
+    private BigDecimal latitude;
 
     /**
      * 备注

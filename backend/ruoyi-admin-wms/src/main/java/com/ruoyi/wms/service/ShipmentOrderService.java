@@ -11,7 +11,6 @@ import com.ruoyi.common.core.exception.ServiceException;
 import com.ruoyi.common.core.exception.base.BaseException;
 import com.ruoyi.common.core.utils.MapstructUtils;
 import com.ruoyi.common.core.utils.StringUtils;
-import com.ruoyi.common.mybatis.core.domain.BaseEntity;
 import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.wms.domain.bo.ShipmentOrderBo;
@@ -109,8 +108,8 @@ public class ShipmentOrderService {
         lqw.eq(bo.getOrderStatus() != null, ShipmentOrder::getOrderStatus, bo.getOrderStatus());
         lqw.like(StringUtils.isNotBlank(bo.getRemark()), ShipmentOrder::getRemark, bo.getRemark());
         lqw.between(params.get("beginTime") != null && params.get("endTime") != null,
-            BaseEntity::getCreateTime, params.get("beginTime"), params.get("endTime"));
-        lqw.orderByDesc(BaseEntity::getCreateTime);
+            ShipmentOrder::getCreateTime, params.get("beginTime"), params.get("endTime"));
+        lqw.orderByDesc(ShipmentOrder::getCreateTime);
         return lqw;
     }
 
