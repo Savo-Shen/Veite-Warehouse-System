@@ -41,6 +41,7 @@
 <script setup>
 import { getToken } from "@/utils/auth";
 import { listByIds, delOss } from "@/api/system/oss";
+import { normalizeOssUrl } from "@/utils/ossUrl";
 
 const props = defineProps({
   modelValue: [String, Object, Array],
@@ -143,7 +144,7 @@ function handleUploadError(err) {
 // 上传成功回调
 function handleUploadSuccess(res, file) {
   if (res.code === 200) {
-    uploadList.value.push({ name: res.data.fileName, url: res.data.url, ossId: res.data.ossId });
+    uploadList.value.push({ name: res.data.fileName, url: normalizeOssUrl(res.data.url), ossId: res.data.ossId });
     uploadedSuccessfully();
   } else {
     number.value--;

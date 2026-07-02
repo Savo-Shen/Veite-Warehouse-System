@@ -8,6 +8,7 @@ import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 
 import java.io.Serial;
+import java.math.BigDecimal;
 
 
 @Data
@@ -35,6 +36,21 @@ public class WarehouseVo extends BaseVo {
      */
     @ExcelProperty(value = "名称")
     private String warehouseName;
+    /**
+     * 地址
+     */
+    @ExcelProperty(value = "地址")
+    private String address;
+    /**
+     * 经度（GCJ-02）
+     */
+    @ExcelProperty(value = "经度")
+    private BigDecimal longitude;
+    /**
+     * 纬度（GCJ-02）
+     */
+    @ExcelProperty(value = "纬度")
+    private BigDecimal latitude;
     /**
      * 排序
      */

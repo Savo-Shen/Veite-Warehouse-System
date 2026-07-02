@@ -7,7 +7,6 @@ import com.ruoyi.common.core.constant.HttpStatus;
 import com.ruoyi.common.core.exception.ServiceException;
 import com.ruoyi.common.core.utils.MapstructUtils;
 import com.ruoyi.common.core.utils.StringUtils;
-import com.ruoyi.common.mybatis.core.domain.BaseEntity;
 import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.wms.domain.bo.ItemBrandBo;
@@ -63,7 +62,7 @@ public class ItemBrandService {
         // Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<ItemBrand> lqw = Wrappers.lambdaQuery();
         lqw.like(StringUtils.isNotBlank(bo.getBrandName()), ItemBrand::getBrandName, bo.getBrandName());
-        lqw.orderByDesc(BaseEntity::getCreateTime);
+        lqw.orderByDesc(ItemBrand::getCreateTime);
         return lqw;
     }
 

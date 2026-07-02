@@ -142,6 +142,8 @@ security:
     - /actuator/**
     # logo
     - /wms/image/logo
+    # 数据库存储模式下的文件回读端点（供 <img> 等匿名加载）
+    - /system/oss/blob/**
 
 # MyBatisPlus配置
 # https://baomidou.com/config/

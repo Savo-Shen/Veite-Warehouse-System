@@ -30,6 +30,7 @@
 import { QuillEditor, Quill } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 import { getToken } from "@/utils/auth";
+import { normalizeOssUrl } from "@/utils/ossUrl";
 
 const props = defineProps({
   /* 编辑器的内容 */
@@ -131,7 +132,7 @@ function handleUploadSuccess(res, file) {
     // 获取光标位置
     let length = quill.selection.savedRange.index;
     // 插入图片，res为服务器返回的图片链接地址
-    quill.insertEmbed(length, "image", res.data.url);
+    quill.insertEmbed(length, "image", normalizeOssUrl(res.data.url));
     // 调整光标到最后
     quill.setSelection(length + 1);
     proxy.$modal.closeLoading();

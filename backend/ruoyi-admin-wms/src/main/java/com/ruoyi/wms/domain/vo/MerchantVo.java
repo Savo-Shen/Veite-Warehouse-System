@@ -10,6 +10,7 @@ import com.ruoyi.wms.domain.entity.Merchant;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.math.BigDecimal;
 
 /**
  * 往来单位视图对象 wms_merchant
@@ -75,6 +76,18 @@ public class MerchantVo implements Serializable {
     private String address;
 
     /**
+     * 经度（GCJ-02）
+     */
+    @ExcelProperty(value = "经度")
+    private BigDecimal longitude;
+
+    /**
+     * 纬度（GCJ-02）
+     */
+    @ExcelProperty(value = "纬度")
+    private BigDecimal latitude;
+
+    /**
      * 手机号
      */
     @ExcelProperty(value = "手机号")
@@ -103,6 +116,11 @@ public class MerchantVo implements Serializable {
      */
     @ExcelProperty(value = "备注")
     private String remark;
+
+    /**
+     * 单位图片OSS ID，多个用逗号分隔
+     */
+    private String imageIds;
 
 
 }

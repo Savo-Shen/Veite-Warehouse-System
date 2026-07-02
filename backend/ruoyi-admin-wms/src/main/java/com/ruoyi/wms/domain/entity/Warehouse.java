@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.io.Serial;
+import java.math.BigDecimal;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -31,6 +32,18 @@ public class Warehouse extends BaseEntity {
      * 名称
      */
     private String warehouseName;
+    /**
+     * 地址
+     */
+    private String address;
+    /**
+     * 经度（GCJ-02）
+     */
+    private BigDecimal longitude;
+    /**
+     * 纬度（GCJ-02）
+     */
+    private BigDecimal latitude;
     /**
      * 排序
      */

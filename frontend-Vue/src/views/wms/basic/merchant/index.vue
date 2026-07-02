@@ -39,7 +39,11 @@
 
       <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
         <el-col :span="6"><span style="font-size: large">往来单位</span></el-col>
-        <el-col :span="1.5">
+        <el-col :span="12" style="display: flex; justify-content: flex-end; gap: 10px">
+          <el-radio-group v-model="viewMode">
+            <el-radio-button label="list">列表</el-radio-button>
+            <el-radio-button label="map">地图</el-radio-button>
+          </el-radio-group>
           <el-button
             type="primary"
             plain
@@ -50,7 +54,7 @@
         </el-col>
       </el-row>
 
-      <el-table v-loading="loading" :data="merchantList" border stripe class="mt20" empty-text="暂无往来单位">
+      <el-table v-show="viewMode === 'list'" v-loading="loading" :data="merchantList" border stripe class="mt20" empty-text="暂无往来单位">
         <el-table-column label="id" prop="id" v-if="false"/>
         <el-table-column label="编号" prop="merchantCode" />
         <el-table-column label="名称" prop="merchantName" />
@@ -60,6 +64,44 @@
           </template>
         </el-table-column>
         <el-table-column label="级别" prop="merchantLevel" />
+        <el-table-column label="地址" prop="address">
+          <template #default="scope">
+            <el-popover
+              v-if="scope.row.longitude && scope.row.latitude"
+              placement="right"
+              :width="290"
+              trigger="hover"
+              @show="loadRowImages(scope.row)"
+            >
+              <template #reference>
+                <span class="addr-link" title="点击在地图总览中定位" @click="gotoMap(scope.row)">
+                  <el-icon color="#67C23A" style="vertical-align: -2px; margin-right: 2px"><LocationFilled /></el-icon>{{ scope.row.address }}
+                </span>
+              </template>
+              <div class="addr-preview">
+                <div class="name">{{ scope.row.merchantName }}</div>
+                <div class="line">{{ scope.row.address }}</div>
+                <div class="line coords">经纬度：{{ scope.row.longitude }}, {{ scope.row.latitude }}</div>
+                <div v-if="(rowImages[scope.row.id] || []).length" class="imgs">
+                  <el-image
+                    v-for="(url, i) in rowImages[scope.row.id]"
+                    :key="url"
+                    :src="url"
+                    :preview-src-list="rowImages[scope.row.id]"
+                    :initial-index="i"
+                    preview-teleported
+                    fit="cover"
+                    class="thumb"
+                  />
+                </div>
+                <div v-else-if="scope.row.imageIds && rowImages[scope.row.id] === undefined" class="line muted">图片加载中…</div>
+                <div v-else class="line muted">暂无图片</div>
+                <div class="line hint">点击地址可跳转「地图总览」并定位</div>
+              </div>
+            </el-popover>
+            <span v-else>{{ scope.row.address }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="联系人" prop="contactPerson" />
         <el-table-column label="备注" prop="remark" />
         <el-table-column label="操作" align="right" class-name="small-padding fixed-width">
@@ -72,13 +114,34 @@
 
       <el-row>
         <pagination
-          v-show="total>0"
+          v-show="viewMode === 'list' && total > 0"
           :total="total"
           v-model:page="queryParams.pageNum"
           v-model:limit="queryParams.pageSize"
           @pagination="getList"
         />
       </el-row>
+
+      <!-- 地图模式：来往单位分布 -->
+      <div v-show="viewMode === 'map'" class="merchant-map-wrap mt20">
+        <template v-if="amapConfigured">
+          <div ref="merchantMapRef" class="merchant-map" v-loading="mapLoading"></div>
+          <div class="map-legend">
+            <span class="legend-item"><i class="dot" style="background: #409EFF"></i>客户</span>
+            <span class="legend-item"><i class="dot" style="background: #67C23A"></i>供应商</span>
+            <span class="legend-item"><i class="dot" style="background: #E6A23C"></i>物流单位</span>
+          </div>
+          <div class="map-tip" v-if="mapStats.total > 0">
+            共 {{ mapStats.total }} 家单位，已标记 {{ mapStats.located }} 家<template v-if="mapStats.total - mapStats.located > 0">，其余 {{ mapStats.total - mapStats.located }} 家可在编辑中通过「地图选点」补充位置</template>
+          </div>
+        </template>
+        <el-empty v-else description="未配置高德地图 Key">
+          <div style="color: #909399; font-size: 13px; line-height: 1.8">
+            请管理员前往「基础资料 → <router-link :to="ENV_CONFIG_ROUTE" style="color: #409EFF">环境配置</router-link>」
+            填写高德地图 Key（页面内有详细申请步骤），保存后回到本页即可使用。
+          </div>
+        </el-empty>
+      </div>
 
     </el-card>
     <!-- 添加或修改往来单位对话框 -->
@@ -110,7 +173,25 @@
           <el-input v-model="form.bankAccount" placeholder="请输入银行账户" />
         </el-form-item>
         <el-form-item label="地址" prop="address">
-          <el-input v-model="form.address" placeholder="请输入地址" />
+          <el-input v-model="form.address" placeholder="请输入地址或通过地图选点获取">
+            <template #append>
+              <el-button icon="Location" @click="pickerVisible = true">地图选点</el-button>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="经纬度">
+          <el-input
+            :model-value="form.longitude && form.latitude ? form.longitude + ', ' + form.latitude : ''"
+            readonly
+            placeholder="通过「地图选点」获取，用于在地图上标记该单位"
+          >
+            <template #append>
+              <el-button icon="Delete" :disabled="!form.longitude" @click="clearLocation">清除</el-button>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="单位图片" prop="imageIds">
+          <image-upload v-model="form.imageIds" :limit="5" />
         </el-form-item>
         <el-form-item label="手机号" prop="mobile">
           <el-input v-model="form.mobile" placeholder="请输入手机号" />
@@ -135,16 +216,30 @@
         </div>
       </template>
     </el-drawer>
+
+    <!-- 地图选点 -->
+    <a-map-picker
+      v-model="pickerVisible"
+      :longitude="form.longitude"
+      :latitude="form.latitude"
+      :address="form.address"
+      @confirm="handlePickLocation"
+    />
   </div>
 </template>
 
 <script setup name="Merchant">
-import { listMerchant, getMerchant, delMerchant, addMerchant, updateMerchant } from "@/api/wms/merchant";
-import {ElMessageBox} from "element-plus";
-import { getCurrentInstance, reactive, ref, toRefs, onMounted, onBeforeUnmount } from "vue";
+import { listMerchant, listMerchantNoPage, getMerchant, delMerchant, addMerchant, updateMerchant } from "@/api/wms/merchant";
+import {ElMessageBox, ElMessage} from "element-plus";
+import { getCurrentInstance, reactive, ref, toRefs, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { useRouter } from "vue-router";
+import AMapPicker from "@/components/AMapPicker";
+import { loadAMap, checkAMapConfigured, ENV_CONFIG_ROUTE, MAP_OVERVIEW_ROUTE, MERCHANT_TYPE_COLORS, MERCHANT_TYPE_DEFAULT_COLOR } from "@/utils/amap";
+import { fetchOssUrls, openMerchantInfoWindow } from "@/utils/mapMarkerInfo";
 
 const { proxy } = getCurrentInstance();
 const { merchant_type } = proxy.useDict('merchant_type');
+const router = useRouter();
 
 const merchantList = ref([]);
 const open = ref(false);
@@ -153,6 +248,17 @@ const loading = ref(true);
 const ids = ref([]);
 const total = ref(0);
 const title = ref("");
+const pickerVisible = ref(false);
+
+// 地图模式
+const viewMode = ref('list');
+const amapConfigured = ref(true);
+const merchantMapRef = ref(null);
+const mapLoading = ref(false);
+const mapStats = reactive({ total: 0, located: 0 });
+let merchantMap = null;
+let mapMarkers = [];
+let mapInfoWindow = null;
 
 const data = reactive({
   form: {},
@@ -205,11 +311,14 @@ function reset() {
     bankName: null,
     bankAccount: null,
     address: null,
+    longitude: null,
+    latitude: null,
     mobile: null,
     tel: null,
     contactPerson: null,
     email: null,
     remark: null,
+    imageIds: null,
     delFlag: null,
     createBy: null,
     createTime: null,
@@ -217,6 +326,39 @@ function reset() {
     updateTime: null
   };
   proxy.resetForm("merchantRef");
+}
+
+/** 地图选点确认 */
+function handlePickLocation({ longitude, latitude, address }) {
+  form.value.longitude = longitude;
+  form.value.latitude = latitude;
+  if (address) {
+    form.value.address = address;
+  }
+}
+
+/** 清除经纬度 */
+function clearLocation() {
+  form.value.longitude = null;
+  form.value.latitude = null;
+}
+
+/** ------- 地址列 hover 预览 / 跳转 ------- */
+// { [merchantId]: 图片URL数组 }，undefined 表示尚未加载
+const rowImages = reactive({});
+const rowImagesLoading = new Set();
+
+function loadRowImages(row) {
+  if (!row.imageIds || rowImages[row.id] !== undefined || rowImagesLoading.has(row.id)) return;
+  rowImagesLoading.add(row.id);
+  fetchOssUrls(row.imageIds)
+    .then(urls => { rowImages[row.id] = urls; })
+    .finally(() => rowImagesLoading.delete(row.id));
+}
+
+/** 跳转地图总览并定位到该单位 */
+function gotoMap(row) {
+  router.push({ path: MAP_OVERVIEW_ROUTE, query: { merchantId: row.id } });
 }
 
 /** 搜索按钮操作 */
@@ -259,6 +401,7 @@ function submitForm() {
           proxy.$modal.msgSuccess("修改成功");
           open.value = false;
           getList();
+          refreshMerchantMarkers();
         }).finally(() => {
           buttonLoading.value = false;
         });
@@ -267,6 +410,7 @@ function submitForm() {
           proxy.$modal.msgSuccess("新增成功");
           open.value = false;
           getList();
+          refreshMerchantMarkers();
         }).finally(() => {
           buttonLoading.value = false;
         });
@@ -283,6 +427,7 @@ function handleDelete(row) {
   }).then((res) => {
     loading.value = true;
     getList();
+    refreshMerchantMarkers();
     proxy.$modal.msgSuccess("删除成功");
   }).finally(() => {
     loading.value = false;
@@ -294,6 +439,71 @@ function handleExport() {
   proxy.download('wms/merchant/export', {
     ...queryParams.value
   }, `merchant_${new Date().getTime()}.xlsx`)
+}
+
+/** ------- 地图模式 ------- */
+watch(viewMode, async (mode) => {
+  if (mode !== 'map') return;
+  amapConfigured.value = await checkAMapConfigured();
+  if (amapConfigured.value) {
+    nextTick(() => initMerchantMap());
+  }
+});
+
+async function initMerchantMap() {
+  mapLoading.value = true;
+  try {
+    const AMap = await loadAMap();
+    if (!merchantMap) {
+      merchantMap = new AMap.Map(merchantMapRef.value, {
+        zoom: 5,
+        viewMode: '2D'
+      });
+      merchantMap.addControl(new AMap.ToolBar());
+      merchantMap.addControl(new AMap.Scale());
+      mapInfoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -14) });
+    }
+    await refreshMerchantMarkers();
+  } catch (e) {
+    ElMessage.error(e.message || '地图加载失败');
+  } finally {
+    mapLoading.value = false;
+  }
+}
+
+async function refreshMerchantMarkers() {
+  if (!merchantMap) return;
+  const res = await listMerchantNoPage({});
+  const list = res.data || [];
+  mapStats.total = list.length;
+  const located = list.filter(m => m.longitude != null && m.latitude != null);
+  mapStats.located = located.length;
+
+  merchantMap.remove(mapMarkers);
+  mapMarkers = [];
+  const AMap = window.AMap;
+  located.forEach(m => {
+    const color = MERCHANT_TYPE_COLORS[m.merchantType] || MERCHANT_TYPE_DEFAULT_COLOR;
+    const marker = new AMap.Marker({
+      position: [Number(m.longitude), Number(m.latitude)],
+      title: m.merchantName,
+      anchor: 'center',
+      content: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:pointer"></div>`
+    });
+    marker.on('click', () => {
+      openMerchantInfoWindow(mapInfoWindow, merchantMap, marker.getPosition(), m, color, typeLabel(m.merchantType));
+    });
+    mapMarkers.push(marker);
+  });
+  if (mapMarkers.length) {
+    merchantMap.add(mapMarkers);
+    merchantMap.setFitView(mapMarkers, false, [60, 60, 60, 60]);
+  }
+}
+
+function typeLabel(type) {
+  const dict = (merchant_type.value || []).find(d => String(d.value) === String(type));
+  return dict ? dict.label : '未知类型';
 }
 
 // 键盘事件处理
@@ -321,5 +531,100 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  if (merchantMap) {
+    merchantMap.destroy()
+    merchantMap = null
+    mapMarkers = []
+    mapInfoWindow = null
+  }
 })
 </script>
+
+<style scoped>
+.merchant-map-wrap {
+  position: relative;
+}
+.merchant-map {
+  width: 100%;
+  height: 560px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.map-legend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 8px 12px;
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+  color: #303133;
+}
+.map-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.map-legend .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.map-tip {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #909399;
+}
+.addr-link {
+  cursor: pointer;
+  color: #409eff;
+}
+.addr-link:hover {
+  text-decoration: underline;
+}
+.addr-preview .name {
+  font-size: 14px;
+  font-weight: bold;
+  color: #303133;
+  margin-bottom: 4px;
+}
+.addr-preview .line {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.6;
+}
+.addr-preview .coords {
+  color: #909399;
+  font-size: 12px;
+}
+.addr-preview .muted {
+  color: #c0c4cc;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.addr-preview .hint {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #ebeef5;
+  color: #909399;
+  font-size: 12px;
+}
+.addr-preview .imgs {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.addr-preview .thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 4px;
+  border: 1px solid #ebeef5;
+  cursor: zoom-in;
+}
+</style>

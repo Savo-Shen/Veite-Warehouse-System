@@ -1,5 +1,6 @@
 package com.ruoyi.wms.utils;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.ruoyi.common.core.utils.StringUtils;
 import com.ruoyi.common.mybatis.core.mapper.BaseMapperPlus;
@@ -115,9 +116,9 @@ public class OrderKeywordSearcher {
         if (skuIds.isEmpty()) {
             return Collections.emptyList();
         }
-        return detailMapper.selectList(Wrappers.<T>lambdaQuery()
-                .select(BaseOrderDetail::getOrderId)
-                .in(BaseOrderDetail::getSkuId, skuIds))
+        return detailMapper.selectList(new QueryWrapper<T>()
+                .select("order_id")
+                .in("sku_id", skuIds))
             .stream()
             .map(BaseOrderDetail::getOrderId)
             .filter(Objects::nonNull)

@@ -7,7 +7,6 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ruoyi.common.core.exception.ServiceException;
 import com.ruoyi.common.core.utils.MapstructUtils;
-import com.ruoyi.common.mybatis.core.domain.BaseEntity;
 import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.wms.domain.bo.ItemTagAssignBo;
@@ -68,7 +67,7 @@ public class ItemTagService {
     private LambdaQueryWrapper<ItemTag> buildQueryWrapper(ItemTagBo bo) {
         LambdaQueryWrapper<ItemTag> lqw = Wrappers.lambdaQuery();
         lqw.like(StrUtil.isNotBlank(bo.getTagName()), ItemTag::getTagName, bo.getTagName());
-        lqw.orderByDesc(BaseEntity::getCreateTime);
+        lqw.orderByDesc(ItemTag::getCreateTime);
         return lqw;
     }
 
