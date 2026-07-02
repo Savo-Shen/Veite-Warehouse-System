@@ -66,6 +66,16 @@ public class DbAlignService {
     private static final String ADD_SHIPMENT_SUPPLEMENT_IMAGES = "ALTER TABLE `wms_shipment_order` ADD COLUMN `supplement_image_ids` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '补充图片OSS ID，多个用逗号分隔' AFTER `remark`";
     private static final String ADD_RECEIPT_SUPPLEMENT_IMAGES = "ALTER TABLE `wms_receipt_order` ADD COLUMN `supplement_image_ids` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '补充图片OSS ID，多个用逗号分隔' AFTER `remark`";
 
+    // 仓库地图相关字段
+    private static final String ADD_WAREHOUSE_ADDRESS = "ALTER TABLE `wms_warehouse` ADD COLUMN `address` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '地址' AFTER `warehouse_name`";
+    private static final String ADD_WAREHOUSE_LONGITUDE = "ALTER TABLE `wms_warehouse` ADD COLUMN `longitude` decimal(10, 6) NULL DEFAULT NULL COMMENT '经度（GCJ-02）' AFTER `address`";
+    private static final String ADD_WAREHOUSE_LATITUDE = "ALTER TABLE `wms_warehouse` ADD COLUMN `latitude` decimal(10, 6) NULL DEFAULT NULL COMMENT '纬度（GCJ-02）' AFTER `longitude`";
+
+    // 往来单位地图相关字段
+    private static final String ADD_MERCHANT_LONGITUDE = "ALTER TABLE `wms_merchant` ADD COLUMN `longitude` decimal(10, 6) NULL DEFAULT NULL COMMENT '经度（GCJ-02）' AFTER `address`";
+    private static final String ADD_MERCHANT_LATITUDE = "ALTER TABLE `wms_merchant` ADD COLUMN `latitude` decimal(10, 6) NULL DEFAULT NULL COMMENT '纬度（GCJ-02）' AFTER `longitude`";
+    private static final String ADD_MERCHANT_IMAGE_IDS = "ALTER TABLE `wms_merchant` ADD COLUMN `image_ids` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '单位图片OSS ID，多个用逗号分隔' AFTER `remark`";
+
     // AI 助手会话历史（按用户隔离）
     private static final String CREATE_AI_CONVERSATION = """
         CREATE TABLE IF NOT EXISTS `wms_ai_conversation` (
@@ -110,6 +120,12 @@ public class DbAlignService {
         steps.add(new Step("商品标签关联表 (wms_item_tag_rel)", "表", () -> tableExists("wms_item_tag_rel"), List.of(CREATE_ITEM_TAG_REL)));
         steps.add(new Step("位置-所属仓库 (wms_location.warehouse_id)", "字段", () -> columnExists("wms_location", "warehouse_id"), List.of(ADD_LOCATION_WAREHOUSE)));
         steps.add(new Step("仓库-货架布局 (wms_warehouse.shelf_layout)", "字段", () -> columnExists("wms_warehouse", "shelf_layout"), List.of(ADD_WAREHOUSE_SHELF_LAYOUT)));
+        steps.add(new Step("仓库-详细地址 (wms_warehouse.address)", "字段", () -> columnExists("wms_warehouse", "address"), List.of(ADD_WAREHOUSE_ADDRESS)));
+        steps.add(new Step("仓库-经度 (wms_warehouse.longitude)", "字段", () -> columnExists("wms_warehouse", "longitude"), List.of(ADD_WAREHOUSE_LONGITUDE)));
+        steps.add(new Step("仓库-纬度 (wms_warehouse.latitude)", "字段", () -> columnExists("wms_warehouse", "latitude"), List.of(ADD_WAREHOUSE_LATITUDE)));
+        steps.add(new Step("往来单位-经度 (wms_merchant.longitude)", "字段", () -> columnExists("wms_merchant", "longitude"), List.of(ADD_MERCHANT_LONGITUDE)));
+        steps.add(new Step("往来单位-纬度 (wms_merchant.latitude)", "字段", () -> columnExists("wms_merchant", "latitude"), List.of(ADD_MERCHANT_LATITUDE)));
+        steps.add(new Step("往来单位-图片 (wms_merchant.image_ids)", "字段", () -> columnExists("wms_merchant", "image_ids"), List.of(ADD_MERCHANT_IMAGE_IDS)));
         steps.add(new Step("出库单-补充图片 (wms_shipment_order.supplement_image_ids)", "字段", () -> columnExists("wms_shipment_order", "supplement_image_ids"), List.of(ADD_SHIPMENT_SUPPLEMENT_IMAGES)));
         steps.add(new Step("入库单-补充图片 (wms_receipt_order.supplement_image_ids)", "字段", () -> columnExists("wms_receipt_order", "supplement_image_ids"), List.of(ADD_RECEIPT_SUPPLEMENT_IMAGES)));
         steps.add(new Step("AI 会话表 (wms_ai_conversation)", "表", () -> tableExists("wms_ai_conversation"), List.of(CREATE_AI_CONVERSATION)));
