@@ -57,6 +57,24 @@
               <el-input v-model="queryParams.skuCode" clearable placeholder="规格编号"></el-input>
             </el-form-item>
 
+            <el-form-item class="col4" label="标签" prop="tagId">
+              <el-select style="width: 100%" v-model="queryParams.tagId" placeholder="请选择标签" filterable clearable @change="handleQuery">
+                <el-option v-for="tag in useWmsStore().itemTagList" :key="tag.id" :label="tag.tagName" :value="tag.id">
+                  <span :style="{ display:'inline-block', width:'10px', height:'10px', borderRadius:'50%', background: tag.color || '#909399', marginRight:'6px', verticalAlign:'middle' }"></span>
+                  {{ tag.tagName }}
+                </el-option>
+              </el-select>
+            </el-form-item>
+
+            <el-form-item class="col4" label="库存预警" prop="maxQuantity">
+              <el-select style="width: 100%" v-model="queryParams.maxQuantity" placeholder="全部库存" clearable @change="handleQuery">
+                <el-option label="缺货（库存 = 0）" :value="0"/>
+                <el-option label="低库存（≤ 5）" :value="5"/>
+                <el-option label="偏低（≤ 10）" :value="10"/>
+                <el-option label="充足（≤ 50）" :value="50"/>
+              </el-select>
+            </el-form-item>
+
           </div>
         </el-collapse-transition>
 
@@ -75,6 +93,11 @@
           />
         </div>
         <div style="display: flex; align-items: center; gap: 12px;">
+          <el-select v-model="queryParams.sortMode" @change="handleQuery" style="width: 150px" placeholder="排序方式">
+            <el-option label="默认排序" value=""/>
+            <el-option label="库存少 → 多" value="quantityAsc"/>
+            <el-option label="库存多 → 少" value="quantityDesc"/>
+          </el-select>
           <el-button type="success" icon="Download" @click="handleExport">
             {{ selectedRows.length ? `导出已选（${selectedRows.length} 条）` : `导出当前页（${ inventoryList.length } 条）` }}
           </el-button>
@@ -244,6 +267,9 @@ const queryParams = ref({
   skuCode: undefined,
   itemLocationId: undefined,
   minQuantity: undefined,
+  maxQuantity: undefined, // 库存上限（缺货/低库存预警）
+  tagId: undefined,       // 标签筛选
+  sortMode: '',           // 排序方式：''默认 / quantityAsc / quantityDesc
   itemKeywords: undefined, // 新增关键字搜索
 })
 
@@ -260,6 +286,8 @@ const detectSearchCondition = (params, filterZero) => {
     || Boolean(String(params.skuName || '').trim())
     || Boolean(String(params.skuCode || '').trim())
     || Boolean(params.itemLocationId)
+    || Boolean(params.tagId)
+    || params.maxQuantity != null
 }
 
 /** 查询库存列表 */
@@ -345,8 +373,11 @@ const handleQuery = () => {
 /** 重置按钮操作 */
 const resetQuery = () => {
   proxy.resetForm("queryRef");
-  // 综合搜索输入框无 prop，resetForm 不会清空，需手动重置
+  // 综合搜索输入框及工具栏排序无 prop，resetForm 不会清空，需手动重置
   queryParams.value.itemKeywords = undefined;
+  queryParams.value.maxQuantity = undefined;
+  queryParams.value.tagId = undefined;
+  queryParams.value.sortMode = '';
   searchedCondition.value = null;
   handleQuery();
 }
