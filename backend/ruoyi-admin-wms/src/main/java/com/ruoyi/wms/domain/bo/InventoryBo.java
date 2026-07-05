@@ -53,9 +53,14 @@ public class InventoryBo extends BaseEntity {
     private String remark;
 
     /**
-     * 最小数量
+     * 最小数量（库存 >= 该值）
      */
     private BigDecimal minQuantity;
+
+    /**
+     * 最大数量（库存 <= 该值，用于筛选缺货/低库存商品）
+     */
+    private BigDecimal maxQuantity;
 
     private String itemName;
     private String itemCode;
@@ -64,4 +69,14 @@ public class InventoryBo extends BaseEntity {
     private Long itemLocationId;
     private Long itemId;
     private Long itemCategory;
+
+    /**
+     * 商品标签ID（按标签筛选）
+     */
+    private Long tagId;
+
+    /**
+     * 排序方式：默认为空（按商品/仓库分组）；quantityAsc 库存升序；quantityDesc 库存降序
+     */
+    private String sortMode;
 }

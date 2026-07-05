@@ -33,14 +33,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         inner join wms_item item on sku.item_id=item.id
         left join wms_location loc on sku.item_location_id = loc.id
         <where>
-            <if test="(bo.itemName != null and bo.itemName != '') 
-                or (bo.itemCode != null and bo.itemCode != '') 
-                or (bo.skuName != null and bo.skuName != '') 
-                or (bo.skuCode != null and bo.skuCode != '') 
-                or (bo.itemCategory != null) 
-                or (bo.itemId != null) 
-                or (bo.warehouseId != null) 
-                or (bo.minQuantity != null) 
+            <if test="(bo.itemName != null and bo.itemName != '')
+                or (bo.itemCode != null and bo.itemCode != '')
+                or (bo.skuName != null and bo.skuName != '')
+                or (bo.skuCode != null and bo.skuCode != '')
+                or (bo.itemCategory != null)
+                or (bo.itemId != null)
+                or (bo.warehouseId != null)
+                or (bo.minQuantity != null)
+                or (bo.maxQuantity != null)
+                or (bo.tagId != null)
                 or (bo.itemLocationId != null)">
                 <if test="bo.itemName != null and bo.itemName != ''">
                     item.item_name like concat('%', #{bo.itemName}, '%')
@@ -66,6 +68,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 <if test="bo.minQuantity != null">
                     and inventory.quantity>=#{bo.minQuantity}
                 </if>
+                <if test="bo.maxQuantity != null">
+                    and inventory.quantity &lt;= #{bo.maxQuantity}
+                </if>
+                <if test="bo.tagId != null">
+                    and exists (
+                        select 1 from wms_item_tag_rel rel
+                        where rel.item_id = item.id and rel.tag_id = #{bo.tagId}
+                    )
+                </if>
                 <if test="bo.itemLocationId != null">
                     and loc.id = #{bo.itemLocationId}
                 </if>
@@ -89,12 +100,32 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="queryWarehouseBoardList" resultMap="inventoryVoMap">
         <include refid="selectVoListByBo"/>
-        order by inventory.warehouse_id,sku.item_id,sku.id
+        <choose>
+            <when test="bo.sortMode == 'quantityAsc'">
+                order by inventory.warehouse_id,inventory.quantity asc,sku.item_id,sku.id
+            </when>
+            <when test="bo.sortMode == 'quantityDesc'">
+                order by inventory.warehouse_id,inventory.quantity desc,sku.item_id,sku.id
+            </when>
+            <otherwise>
+                order by inventory.warehouse_id,sku.item_id,sku.id
+            </otherwise>
+        </choose>
     </select>
 
     <select id="queryItemBoardList" resultMap="inventoryVoMap">
         <include refid="selectVoListByBo"/>
-        order by sku.item_id,sku.id,inventory.warehouse_id
+        <choose>
+            <when test="bo.sortMode == 'quantityAsc'">
+                order by inventory.quantity asc,sku.item_id,sku.id,inventory.warehouse_id
+            </when>
+            <when test="bo.sortMode == 'quantityDesc'">
+                order by inventory.quantity desc,sku.item_id,sku.id,inventory.warehouse_id
+            </when>
+            <otherwise>
+                order by sku.item_id,sku.id,inventory.warehouse_id
+            </otherwise>
+        </choose>
     </select>
 
     <select id="queryExportList" resultMap="inventoryVoMap">
