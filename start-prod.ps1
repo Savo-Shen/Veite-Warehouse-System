@@ -1,8 +1,12 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $Host.UI.RawUI.WindowTitle = "威特仓库管理系统 - 正式启动"
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ($env:VEITE_WMS_SCRIPT_DIR) {
+    $ScriptDir = $env:VEITE_WMS_SCRIPT_DIR
+} else {
+    $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
 $BackendDir = Join-Path $ScriptDir "backend"
 $FrontendDir = Join-Path $ScriptDir "frontend-Vue"
 $EnvFile = Join-Path $BackendDir ".env"
@@ -131,13 +135,6 @@ function Stop-System {
     Stop-TrackedProcess $script:BackendProcess
     Stop-PortsStartedByThisScript
     Write-Host "已关闭。"
-}
-
-[Console]::CancelKeyPress += {
-    param($sender, $eventArgs)
-    $eventArgs.Cancel = $true
-    Stop-System
-    exit 0
 }
 
 try {
