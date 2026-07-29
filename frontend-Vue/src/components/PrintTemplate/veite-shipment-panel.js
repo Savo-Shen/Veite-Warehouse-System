@@ -254,7 +254,8 @@ function buildPanel(size, options) {
   // ---------------- 页脚：送货人 / 收货人 / 备注；制单人+页码同排 ----------------
   let fy = paperFooter + (compact ? 2 : 4)
 
-  const rightColW = mm(50)
+  // 右侧信息栏向左扩展，给“制单人：姓名”留出完整单行宽度。
+  const rightColW = mm(58)
   const signW = Math.round(((contentW - rightColW) / 2) * 100) / 100
   const signCols = [
     { title: '送货人', field: 'deliveryBy', line: true },
@@ -282,10 +283,12 @@ function buildPanel(size, options) {
     left: rightColLeft, top: fy + footerRowH,
     width: rightColW - pageNoW - 4, height: footerRowH,
     title: '制单人', field: 'createBy', fontSize: fs.footer,
-    textAlign: 'left', textContentVerticalAlign: 'middle'
+    textAlign: 'left', textContentWrap: 'nowrap', textContentVerticalAlign: 'middle'
   })
-  const pageNoLeft = Math.round((margin + contentW - pageNoW) * 100) / 100
-  const pageNoTop = Math.round((fy + footerRowH) * 100) / 100
+  // paperNumberLeft 是页码文字的左起点。把起点放到版心右边缘，再让内部文字
+  // 向左平移自身宽度，页码的实际右边缘就能和表格右边线精确对齐。
+  const pageNoLeft = Math.round((margin + contentW) * 100) / 100
+  const pageNoTop = Math.round((fy + footerBandH - 10) * 100) / 100
   fy += footerBandH
 
   if (!compact) {
@@ -306,7 +309,7 @@ function buildPanel(size, options) {
     printElements: elements,
     paperNumberDisabled: false,
     paperNumberContinue: true,
-    paperNumberFormat: '第${paperNo}页/共${paperCount}页',
+    paperNumberFormat: '<span style="display:inline-block;transform:translateX(-100%);white-space:nowrap">第${paperNo}页/共${paperCount}页</span>',
     // 页码与制单人同排，固定贴住版心右边缘
     paperNumberLeft: pageNoLeft,
     paperNumberTop: pageNoTop
