@@ -17,12 +17,33 @@ export const PRINT_TABLE_CELL_CSS = `
 `
 
 /**
+ * 单元格样式必须在【当前页面】也生效：
+ * hiprint 是先在主文档里把表格渲染到临时容器量高度、再决定每页放几行，
+ * 只在打印窗口里加样式的话，量的是没有内边距的矮行高，打印时行变高就会
+ * 溢出到备注/签名上面。所以这里模块加载时就把同一份样式注入主文档。
+ */
+let cellCssInjected = false
+
+export function ensurePrintTableCellCss() {
+  if (cellCssInjected || typeof document === 'undefined') {
+    return
+  }
+  const style = document.createElement('style')
+  style.setAttribute('data-hiprint-cell', '')
+  style.innerHTML = PRINT_TABLE_CELL_CSS
+  document.head.appendChild(style)
+  cellCssInjected = true
+}
+
+ensurePrintTableCellCss()
+
+/**
  * hiprint 打印窗口的样式。
  * 原来引的是 OSS 上的 print-lock.css，内网/断网环境会加载失败导致排版错乱，
  * 这里直接把 npm 包里自带的同一份样式内联进打印窗口。
  */
 export function printStyleHandler() {
-  return `<style media="print">${printLockCss}${PRINT_TABLE_CELL_CSS}</style>`
+  return `<style media="print">${printLockCss}</style><style>${PRINT_TABLE_CELL_CSS}</style>`
 }
 
 /**
