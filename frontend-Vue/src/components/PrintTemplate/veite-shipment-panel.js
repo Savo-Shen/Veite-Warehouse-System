@@ -10,6 +10,9 @@
 const PT_PER_MM = 2.8346
 const mm = (v) => Math.round(v * PT_PER_MM * 100) / 100
 
+/** 毫米转 pt。hiprint 的打印偏移单位是 pt，外部也要用 */
+export const mmToPt = mm
+
 const COMPANY_NAME = '威特液压设备有限公司'
 const COMPANY_ADDRESS = '福建省泉州市鲤城区义全街303号'
 const COMPANY_TEL = 'TEL: 13959893950'
@@ -21,10 +24,20 @@ const BANK_INFO = '开户行：工商银行　　户名：余惠萍　　卡号�
  * autoCompletion：自动补空白行铺满表格区域（会把备注签名区顶到纸张底部，默认关）。
  * minRows：明细不足时补到几行空行，让单据看起来是画好格子的完整表。
  * 明细放不下时由 hiprint 自动拆页，每页重复表头页眉页脚，合计只出现在最后一页。
+ * marginX/marginY：页边距(mm)。
+ *   241mm 针式连续纸两侧各有 12.7mm(0.5英寸) 走纸孔边条，撕掉后有效幅面只有
+ *   215.9mm(8.5英寸)，所以左右必须留够 12.7mm 以上，否则右边会打出纸外；
+ *   上下贴着齿孔撕线也打不全，留 7mm。
  */
 export const SHIPMENT_PAPER_SIZES = [
-  { key: 'a4', name: 'A4 (210×297mm)', width: 210, height: 297, compact: false, autoCompletion: false, minRows: 8 },
-  { key: 'triple-241x140', name: '针式二等分 (241×140mm)', width: 241, height: 140, compact: true, autoCompletion: false, minRows: 5 }
+  {
+    key: 'a4', name: 'A4 (210×297mm)', width: 210, height: 297,
+    marginX: 8, marginY: 8, compact: false, autoCompletion: false, minRows: 8
+  },
+  {
+    key: 'triple-241x140', name: '针式二等分 (241×140mm)', width: 241, height: 140,
+    marginX: 14, marginY: 7, compact: true, autoCompletion: false, minRows: 5
+  }
 ]
 
 export const DEFAULT_SHIPMENT_PAPER_SIZE = 'a4'
@@ -51,9 +64,10 @@ function buildPanel(size, options) {
   const logo = options && options.logo
   const W = mm(size.width)
   const H = mm(size.height)
-  const margin = mm(compact ? 4 : 8)
+  // margin = 左右边距，marginY = 上下边距（针式纸两侧要避开走纸孔，上下要避开撕线）
+  const margin = mm(size.marginX)
+  const marginY = mm(size.marginY)
   const contentW = Math.round((W - margin * 2) * 100) / 100
-  const right = margin + contentW
 
   const fs = compact
     ? { company: 15, title: 15, info: 10, table: 10, footer: 9.5 }
@@ -66,7 +80,7 @@ function buildPanel(size, options) {
   const text = (options) => elements.push({ options, printElementType: { type: 'text' } })
 
   // ---------------- 页眉 ----------------
-  let y = margin
+  let y = marginY
 
   if (logo) {
     elements.push({
@@ -158,7 +172,7 @@ function buildPanel(size, options) {
   // 出现"最后一页只有签名、一行明细都没有"的孤儿页，所以这里固定。
   const footerRowCount = compact ? 2 : 3
   const footerH = (rowH + 2) * footerRowCount + (compact ? 4 : 8)
-  const paperFooter = Math.round((H - margin - footerH) * 100) / 100
+  const paperFooter = Math.round((H - marginY - footerH) * 100) / 100
 
   // ---------------- 商品表格 ----------------
   const tableTop = paperHeader + 2
@@ -250,7 +264,7 @@ function buildPanel(size, options) {
     paperNumberContinue: true,
     paperNumberFormat: '第${paperNo}页/共${paperCount}页',
     paperNumberLeft: Math.round(W - margin - mm(28)),
-    paperNumberTop: Math.round(H - margin - (compact ? 8 : 10))
+    paperNumberTop: Math.round(H - marginY - (compact ? 8 : 10))
   }
 }
 

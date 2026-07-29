@@ -357,6 +357,17 @@
               <el-input v-model="printForm.remark" />
             </el-form-item>
           </el-col>
+          <el-col :span="24">
+            <el-form-item label="打印偏移">
+              <el-input-number v-model="offsetX" :step="1" :precision="1" controls-position="right" style="width: 130px;" />
+              <span style="margin: 0 12px 0 6px; color: #909399;">mm 左右（正数右移）</span>
+              <el-input-number v-model="offsetY" :step="1" :precision="1" controls-position="right" style="width: 130px;" />
+              <span style="margin-left: 6px; color: #909399;">mm 上下（正数下移）</span>
+              <div style="color: #909399; font-size: 12px; line-height: 1.6;">
+                针式打印机每次装纸位置会有偏差，打偏了用这两个值微调，会按纸张分别记住。
+              </div>
+            </el-form-item>
+          </el-col>
           <el-col :span="8">
             <el-form-item label="制单人">
               <el-input v-model="printForm.createBy" />
@@ -415,13 +426,14 @@
 <script setup name="ShipmentOrder">
 import {listShipmentOrder, delShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
 import {listByShipmentOrderId} from "@/api/wms/shipmentOrderDetail";
-import {getCurrentInstance, reactive, ref, computed, toRefs, onMounted, onBeforeUnmount} from "vue";
+import {getCurrentInstance, reactive, ref, computed, watch, toRefs, onMounted, onBeforeUnmount} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
 import {
   buildVeiteShipmentPanel,
   SHIPMENT_PAPER_SIZES,
   DEFAULT_SHIPMENT_PAPER_SIZE,
-  getShipmentPaperSize
+  getShipmentPaperSize,
+  mmToPt
 } from "@/components/PrintTemplate/veite-shipment-panel";
 import { printStyleHandler, loadPrintLogo } from "@/utils/print";
 import OrderImageGallery from "@/components/OrderImageGallery";
@@ -447,6 +459,34 @@ const paperSizeKey = ref(localStorage.getItem(PAPER_SIZE_STORAGE_KEY) || DEFAULT
 const currentPaperSize = computed(() => getShipmentPaperSize(paperSizeKey.value))
 // 正在打印的出库单id，避免重复点击
 const printingId = ref(null)
+// 打印偏移(mm)：针式打印机装纸位置有偏差，按纸张分别记住
+const OFFSET_STORAGE_KEY = 'wms:shipment:printOffset'
+const offsetX = ref(0)
+const offsetY = ref(0)
+
+function readOffsets() {
+  try {
+    return JSON.parse(localStorage.getItem(OFFSET_STORAGE_KEY)) || {}
+  } catch (e) {
+    return {}
+  }
+}
+
+function loadOffset() {
+  const saved = readOffsets()[paperSizeKey.value] || {}
+  offsetX.value = Number(saved.x) || 0
+  offsetY.value = Number(saved.y) || 0
+}
+
+function saveOffset() {
+  const all = readOffsets()
+  all[paperSizeKey.value] = { x: offsetX.value || 0, y: offsetY.value || 0 }
+  localStorage.setItem(OFFSET_STORAGE_KEY, JSON.stringify(all))
+}
+
+loadOffset()
+watch(paperSizeKey, loadOffset)
+
 // 打印前校对弹窗
 const printDialogVisible = ref(false)
 const printForm = ref({})
@@ -595,6 +635,7 @@ async function handlePrint(row, sizeKey) {
 /** 弹窗确认后真正出纸 */
 async function doPrint() {
   localStorage.setItem(PAPER_SIZE_STORAGE_KEY, paperSizeKey.value)
+  saveOffset()
   const minRows = currentPaperSize.value.minRows || 0
   let no = 0
   const rows = printRows.value.map(row => {
@@ -613,7 +654,12 @@ async function doPrint() {
     const printTemplate = new proxy.$hiprint.PrintTemplate({
       template: buildVeiteShipmentPanel(paperSizeKey.value, { logo })
     })
-    printTemplate.print({ ...printForm.value, table: rows }, {}, { styleHandler: printStyleHandler })
+    // hiprint 的偏移单位是 pt，整页内容一起平移
+    const printOptions = {
+      leftOffset: mmToPt(offsetX.value || 0),
+      topOffset: mmToPt(offsetY.value || 0)
+    }
+    printTemplate.print({ ...printForm.value, table: rows }, printOptions, { styleHandler: printStyleHandler })
     printDialogVisible.value = false
   } catch (e) {
     console.error(e)
