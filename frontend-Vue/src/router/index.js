@@ -129,6 +129,32 @@ export const constantRoutes = [
       }
     ]
   },
+  {
+    path: '',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '/wms/dbBackup',
+        component: () => import('@/views/wms/tool/dbBackup/index'),
+        name: 'WmsDbBackupFallback',
+        meta: { title: '数据库备份', icon: 'download' }
+      }
+    ]
+  },
+  {
+    path: '',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '/wms/dbImport',
+        component: () => import('@/views/wms/tool/dbImport/index'),
+        name: 'WmsDbImportFallback',
+        meta: { title: '数据库导入', icon: 'upload' }
+      }
+    ]
+  },
   // {
   //   path: '',
   //   component: Layout,
