@@ -24,19 +24,23 @@ const BANK_INFO = '开户行：工商银行　　户名：余惠萍　　卡号�
  * autoCompletion：自动补空白行铺满表格区域（会把备注签名区顶到纸张底部，默认关）。
  * minRows：明细不足时补到几行空行，让单据看起来是画好格子的完整表。
  * 明细放不下时由 hiprint 自动拆页，每页重复表头页眉页脚，合计只出现在最后一页。
- * marginX/marginY：页边距(mm)。
- *   241mm 针式连续纸两侧各有 12.7mm(0.5英寸) 走纸孔边条，撕掉后有效幅面只有
- *   215.9mm(8.5英寸)，所以左右必须留够 12.7mm 以上，否则右边会打出纸外；
- *   上下贴着齿孔撕线也打不全，留 7mm。
+ * marginLeft / contentWidth / marginTop / marginBottom：版心(mm)。
+ *   针式连续纸的可打印区不是以纸张居中的，而是从纸左边缘起算的固定宽度
+ *   （80列针打一般是 8 英寸 ≈ 203mm），超过这个位置打印头够不到，右边就被截掉。
+ *   同时左边 12.7mm(0.5英寸) 是走纸孔边条，撕掉后就没了，内容不能压上去。
+ *   所以版心必须落在 [12.7mm, 203mm] 这条带子里：左边距 14mm + 内容宽 188mm
+ *   = 右边缘 202mm，两头都留了余量。
  */
 export const SHIPMENT_PAPER_SIZES = [
   {
     key: 'a4', name: 'A4 (210×297mm)', width: 210, height: 297,
-    marginX: 8, marginY: 8, compact: false, autoCompletion: false, minRows: 8
+    marginLeft: 8, contentWidth: 194, marginTop: 8, marginBottom: 10,
+    compact: false, autoCompletion: false, minRows: 8
   },
   {
     key: 'triple-241x140', name: '针式二等分 (241×140mm)', width: 241, height: 140,
-    marginX: 14, marginY: 7, compact: true, autoCompletion: false, minRows: 5
+    marginLeft: 14, contentWidth: 188, marginTop: 7, marginBottom: 11,
+    compact: true, autoCompletion: false, minRows: 5
   }
 ]
 
@@ -64,10 +68,11 @@ function buildPanel(size, options) {
   const logo = options && options.logo
   const W = mm(size.width)
   const H = mm(size.height)
-  // margin = 左右边距，marginY = 上下边距（针式纸两侧要避开走纸孔，上下要避开撕线）
-  const margin = mm(size.marginX)
-  const marginY = mm(size.marginY)
-  const contentW = Math.round((W - margin * 2) * 100) / 100
+  // 版心：左边距 + 内容宽度（不是纸宽减两倍边距，针式纸的可打印区并不居中）
+  const margin = mm(size.marginLeft)
+  const marginY = mm(size.marginTop)
+  const marginBottom = mm(size.marginBottom)
+  const contentW = mm(size.contentWidth)
 
   const fs = compact
     ? { company: 15, title: 15, info: 10, table: 10, footer: 9.5 }
@@ -86,7 +91,7 @@ function buildPanel(size, options) {
     elements.push({
       options: {
         left: margin, top: y,
-        width: mm(compact ? 30 : 38), height: mm(compact ? 12 : 16),
+        width: mm(compact ? 42 : 50), height: mm(compact ? 13 : 18),
         src: logo, fit: 'contain'
       },
       printElementType: { title: '图片', type: 'image' }
@@ -172,7 +177,7 @@ function buildPanel(size, options) {
   // 出现"最后一页只有签名、一行明细都没有"的孤儿页，所以这里固定。
   const footerRowCount = compact ? 2 : 3
   const footerH = (rowH + 2) * footerRowCount + (compact ? 4 : 8)
-  const paperFooter = Math.round((H - marginY - footerH) * 100) / 100
+  const paperFooter = Math.round((H - marginBottom - footerH) * 100) / 100
 
   // ---------------- 商品表格 ----------------
   const tableTop = paperHeader + 2
@@ -263,8 +268,9 @@ function buildPanel(size, options) {
     paperNumberDisabled: false,
     paperNumberContinue: true,
     paperNumberFormat: '第${paperNo}页/共${paperCount}页',
-    paperNumberLeft: Math.round(W - margin - mm(28)),
-    paperNumberTop: Math.round(H - marginY - (compact ? 8 : 10))
+    // 页码贴版心右边缘，跟着内容走，不跟纸张右边走
+    paperNumberLeft: Math.round(margin + contentW - mm(28)),
+    paperNumberTop: Math.round(H - marginBottom - (compact ? 8 : 10))
   }
 }
 
