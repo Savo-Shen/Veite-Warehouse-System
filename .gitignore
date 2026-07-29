@@ -15,3 +15,6 @@ application-local.yml
 
 # 数据库备份/恢复转储（体积大，含真实数据，切勿提交）
 recovery/
+
+# 本地 IDE / 助手配置，不入库
+.claude/
