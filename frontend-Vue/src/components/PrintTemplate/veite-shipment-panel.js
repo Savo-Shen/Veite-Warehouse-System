@@ -75,23 +75,33 @@ function buildPanel(size, options) {
   const contentW = mm(size.contentWidth)
 
   const fs = compact
-    ? { company: 13, title: 19, side: 8.5, info: 10, table: 10, footer: 9.5 }
-    : { company: 16, title: 24, side: 9.5, info: 11, table: 11, footer: 10.5 }
+    ? { company: 14, title: 20, side: 9, info: 10, table: 10, footer: 10 }
+    : { company: 17, title: 25, side: 10, info: 11, table: 11, footer: 10.5 }
   const rowH = compact ? 15 : 17
   // 表格正文行高，针式纸也要留够手写和复写的空间
   const bodyRowH = compact ? 20 : 24
+  // 针打分辨率低（180dpi 上下），加粗会让笔画点阵糊成一团，
+  // 所以针式纸一律常规字重，靠字号和字间距做层级；A4 走激光/喷墨，加粗没问题
+  const bold = compact ? 'normal' : '600'
 
   const elements = []
-  const text = (options) => elements.push({ options, printElementType: { type: 'text' } })
+  const text = (options) => elements.push({
+    options: { fontFamily: 'SimSun', ...options },
+    printElementType: { type: 'text' }
+  })
+  const hline = (o) => elements.push({
+    options: { ...o, borderWidth: 0.75 },
+    printElementType: { title: '横线', type: 'hline' }
+  })
 
   // ---------------- 页眉：左 logo / 中 公司名+大标题 / 右 地址电话 ----------------
   let y = marginY
 
-  const logoW = mm(compact ? 46 : 54)
-  const logoH = mm(compact ? 15 : 19)
-  const sideW = mm(compact ? 58 : 68)
-  const centerLeft = margin + logoW + mm(3)
-  const centerW = Math.round((contentW - logoW - sideW - mm(6)) * 100) / 100
+  const logoW = mm(compact ? 44 : 48)
+  const logoH = mm(compact ? 15 : 18)
+  const sideW = mm(compact ? 63 : 70)
+  const centerLeft = margin + logoW + mm(2)
+  const centerW = Math.round((contentW - logoW - sideW - mm(4)) * 100) / 100
 
   if (logo) {
     elements.push({
@@ -100,33 +110,35 @@ function buildPanel(size, options) {
     })
   }
 
+  // 公司名做疏排（拉开字距），和下面同样疏排的大标题成一套，不靠加粗撑场面
   text({
     left: centerLeft, top: y, width: centerW, height: fs.company + 6,
-    title: COMPANY_NAME, fontSize: fs.company, fontWeight: '600', letterSpacing: 1,
+    title: COMPANY_NAME, fontSize: fs.company, fontWeight: bold,
+    letterSpacing: compact ? 2.5 : 3,
     textAlign: 'center', textContentVerticalAlign: 'middle'
   })
 
   text({
-    left: centerLeft, top: y + fs.company + 8, width: centerW, height: fs.title + 8,
-    title: '送 货 单', fontFamily: 'SimSun', fontSize: fs.title, fontWeight: '600',
-    letterSpacing: compact ? 4 : 6, textAlign: 'center', textContentVerticalAlign: 'middle'
+    left: centerLeft, top: y + fs.company + 9, width: centerW, height: fs.title + 8,
+    title: '送 货 单', fontSize: fs.title, fontWeight: bold,
+    letterSpacing: compact ? 6 : 8, textAlign: 'center', textContentVerticalAlign: 'middle'
   })
 
-  // 右上角：公司地址、电话，右对齐贴版心右边缘
+  // 右上角：地址/电话按"标签+内容"左对齐排，两行长度接近，能把右上角填满
   const sideLeft = Math.round((margin + contentW - sideW) * 100) / 100
   text({
-    left: sideLeft, top: y + 2, width: sideW, height: fs.side + 4,
-    title: COMPANY_ADDRESS, fontSize: fs.side,
-    textAlign: 'right', textContentVerticalAlign: 'middle'
+    left: sideLeft, top: y + 3, width: sideW, height: fs.side + 5,
+    title: `地　址：${COMPANY_ADDRESS}`, fontSize: fs.side,
+    textContentVerticalAlign: 'middle'
   })
   text({
-    left: sideLeft, top: y + fs.side + 8, width: sideW, height: fs.side + 4,
-    title: COMPANY_TEL, fontSize: fs.side,
-    textAlign: 'right', textContentVerticalAlign: 'middle'
+    left: sideLeft, top: y + fs.side + 11, width: sideW, height: fs.side + 5,
+    title: `电　话：${COMPANY_TEL.replace('TEL: ', '')}`, fontSize: fs.side,
+    textContentVerticalAlign: 'middle'
   })
 
   // 页眉整体高度取 logo 和中间标题块里更高的那个
-  y += Math.max(logoH, fs.company + fs.title + 18) + (compact ? 4 : 8)
+  y += Math.max(logoH, fs.company + fs.title + 19) + (compact ? 4 : 8)
 
   // 单据信息：先单据（单号/日期/业务单号），再收货方（客户/电话/地址）
   const infoRows = compact
@@ -181,8 +193,10 @@ function buildPanel(size, options) {
   // 备注/签名区固定在纸张底部（paperFooter 以下即页脚区，每页重复）。
   // 让它跟着表格流动看起来更紧凑，但表格填满一页时签名会被挤到下一页，
   // 出现"最后一页只有签名、一行明细都没有"的孤儿页，所以这里固定。
-  const footerRowCount = compact ? 2 : 3
-  const footerH = (rowH + 2) * footerRowCount + (compact ? 4 : 8)
+  // 备注行 + 签名区（要留出实际能签字的高度）+ 银行信息(仅A4) + 单独一行页码
+  const signBandH = compact ? 30 : 34
+  const pageNoH = 12
+  const footerH = (rowH + 3) + signBandH + (compact ? 0 : rowH + 3) + pageNoH + 4
   const paperFooter = Math.round((H - marginBottom - footerH) * 100) / 100
 
   // ---------------- 商品表格 ----------------
@@ -222,7 +236,8 @@ function buildPanel(size, options) {
       field: 'table',
       fontSize: fs.table,
       tableHeaderFontSize: fs.table,
-      tableHeaderFontWeight: '600',
+      tableHeaderFontWeight: bold,
+      fontFamily: 'SimSun',
       tableHeaderRowHeight: rowH + 4,
       tableBodyRowHeight: bodyRowH,
       // 分页时表头每页重复，合计行只出现在最后一页
@@ -242,25 +257,31 @@ function buildPanel(size, options) {
   })
   fy += rowH + 2
 
+  // 签名区：标签在上，下面留一条签字线，中间的空白才是真正能写字的地方
   const signCols = [
-    { title: '制单人', field: 'createBy' },
-    { title: '送货人', field: 'deliveryBy' },
-    { title: '收货人签字', field: 'receiveBy' }
+    { title: '制单人', field: 'createBy', line: false },
+    { title: '送货人', field: 'deliveryBy', line: true },
+    { title: '收货人签字', field: 'receiveBy', line: true }
   ]
   const signW = Math.round((contentW / signCols.length) * 100) / 100
   signCols.forEach((col, idx) => {
+    const left = Math.round((margin + signW * idx) * 100) / 100
     text({
-      left: margin + signW * idx, top: fy, width: signW - 4, height: rowH,
-      title: col.title, field: col.field, fontSize: fs.footer, textContentVerticalAlign: 'middle'
+      left, top: fy, width: signW - 6, height: rowH,
+      title: col.title, field: col.field, fontSize: fs.footer, textContentVerticalAlign: 'top'
     })
+    if (col.line) {
+      hline({ left, top: fy + signBandH - 6, width: signW - 10, height: 1 })
+    }
   })
-  fy += rowH + 2
+  fy += signBandH
 
   if (!compact) {
     text({
       left: margin, top: fy, width: contentW, height: rowH,
       title: BANK_INFO, fontSize: fs.footer - 1, textContentVerticalAlign: 'middle'
     })
+    fy += rowH + 3
   }
 
   return {
@@ -276,7 +297,8 @@ function buildPanel(size, options) {
     paperNumberFormat: '第${paperNo}页/共${paperCount}页',
     // 页码贴版心右边缘，跟着内容走，不跟纸张右边走
     paperNumberLeft: Math.round(margin + contentW - mm(28)),
-    paperNumberTop: Math.round(H - marginBottom - (compact ? 8 : 10))
+    // 页码单独占页脚最后一行，页脚高度里已经给它留了 pageNoH，不会压住签名
+    paperNumberTop: Math.round(H - marginBottom - pageNoH + 2)
   }
 }
 
