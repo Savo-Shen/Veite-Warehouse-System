@@ -1,4 +1,5 @@
 import printLockCss from 'vue-plugin-hiprint/dist/print-lock.css?raw'
+import logoUrl from '@/assets/images/veite-logo.png'
 
 /**
  * 表格单元格补充样式：hiprint 默认单元格行高很挤，商品名称一换行两行就贴在一起，
@@ -47,19 +48,20 @@ export function printStyleHandler() {
 }
 
 /**
- * 打印模板里的公司 logo 地址。
- * 走后端 /wms/image/logo（已在 security.excludes 中放行，无需 token），
- * 用 baseApi 前缀拼相对地址，避免写死某台机器的 host。
+ * 打印模板里的公司 logo。
+ * 直接打进前端包（src/assets/images/veite-logo.png），不再走后端 /wms/image/logo：
+ * 那条链路要同时依赖后端部署到位、nginx 转发和接口放行，任何一环出问题纸上就没有 logo。
+ * 这是一张固定的公司图，跟着前端一起发布最稳。
  */
-export const PRINT_LOGO_URL = `${import.meta.env.VITE_APP_BASE_API}/wms/image/logo`
+export const PRINT_LOGO_URL = logoUrl
 
 let logoCache
 
 /**
  * 取 logo 的 base64。
- * hiprint 是把模板塞进隐藏 iframe 再调打印，图片来不及加载或接口不通时
- * 纸上会留一个空白方框；这里先在主页面把图取回来转成 data URI，
- * 拿不到就返回 null，模板直接不画这个元素，不会留空框。
+ * hiprint 是把模板塞进隐藏 iframe 再调打印，图片来不及加载纸上会留一个空白方框；
+ * 这里先在主页面把图转成 data URI 一起塞进模板。
+ * 万一转换失败就退回用图片地址（同源静态文件，iframe 里一般也能加载）。
  */
 export function loadPrintLogo() {
   if (logoCache !== undefined) {
@@ -78,8 +80,8 @@ export function loadPrintLogo() {
       return dataUrl
     })
     .catch(err => {
-      console.warn('打印 logo 加载失败，本次不打印 logo：', err)
-      logoCache = null
-      return null
+      console.warn('打印 logo 转 base64 失败，改用图片地址：', err)
+      logoCache = PRINT_LOGO_URL
+      return logoCache
     })
 }
