@@ -75,18 +75,18 @@ function buildPanel(size, options) {
   const contentW = mm(size.contentWidth)
 
   const fs = compact
-    ? { company: 14, title: 20, side: 9, info: 10, table: 10, footer: 10 }
-    : { company: 17, title: 25, side: 10, info: 11, table: 11, footer: 10.5 }
-  const rowH = compact ? 15 : 17
+    ? { company: 15, title: 21, side: 10, info: 11, table: 11, footer: 11 }
+    : { company: 18, title: 26, side: 11, info: 12, table: 12, footer: 11.5 }
+  const rowH = compact ? 17 : 19
   // 表格正文行高，针式纸也要留够手写和复写的空间
   const bodyRowH = compact ? 20 : 24
-  // 针打分辨率低（180dpi 上下），加粗会让笔画点阵糊成一团，
-  // 所以针式纸一律常规字重，靠字号和字间距做层级；A4 走激光/喷墨，加粗没问题
-  const bold = compact ? 'normal' : '600'
+  // 实际针打测试中，宋体常规字重的横画偏弱、容易断线。恢复 600 字重并整体放大，
+  // 让复写联上的细横画有足够击打密度；仍保留宋体和疏排，避免黑体式的笔画拥挤。
+  const printWeight = '600'
 
   const elements = []
   const text = (options) => elements.push({
-    options: { fontFamily: 'SimSun', ...options },
+    options: { fontFamily: 'SimSun', fontWeight: printWeight, ...options },
     printElementType: { type: 'text' }
   })
   const hline = (o) => elements.push({
@@ -113,14 +113,14 @@ function buildPanel(size, options) {
   // 公司名做疏排（拉开字距），和下面同样疏排的大标题成一套，不靠加粗撑场面
   text({
     left: centerLeft, top: y, width: centerW, height: fs.company + 6,
-    title: COMPANY_NAME, fontSize: fs.company, fontWeight: bold,
+    title: COMPANY_NAME, fontSize: fs.company,
     letterSpacing: compact ? 2.5 : 3,
     textAlign: 'center', textContentVerticalAlign: 'middle'
   })
 
   text({
     left: centerLeft, top: y + fs.company + 9, width: centerW, height: fs.title + 8,
-    title: '送 货 单', fontSize: fs.title, fontWeight: bold,
+    title: '送 货 单', fontSize: fs.title,
     letterSpacing: compact ? 6 : 8, textAlign: 'center', textContentVerticalAlign: 'middle'
   })
 
@@ -193,10 +193,11 @@ function buildPanel(size, options) {
   // 备注/签名区固定在纸张底部（paperFooter 以下即页脚区，每页重复）。
   // 让它跟着表格流动看起来更紧凑，但表格填满一页时签名会被挤到下一页，
   // 出现"最后一页只有签名、一行明细都没有"的孤儿页，所以这里固定。
-  // 备注行 + 签名区（要留出实际能签字的高度）+ 银行信息(仅A4) + 单独一行页码
-  const signBandH = compact ? 30 : 34
-  const pageNoH = 12
-  const footerH = (rowH + 3) + signBandH + (compact ? 0 : rowH + 3) + pageNoH + 4
+  // 第一行并排放备注、制单人、页码；第二行只留送货人和收货人。
+  // 签名带缩短后仍有横线可签，同时把此前单独给页码预留的高度还给商品表格。
+  const metaBandH = rowH + 3
+  const signBandH = compact ? 23 : 25
+  const footerH = metaBandH + signBandH + (compact ? 0 : rowH + 3) + 4
   const paperFooter = Math.round((H - marginBottom - footerH) * 100) / 100
 
   // ---------------- 商品表格 ----------------
@@ -235,8 +236,9 @@ function buildPanel(size, options) {
       height: tableHeight,
       field: 'table',
       fontSize: fs.table,
+      fontWeight: printWeight,
       tableHeaderFontSize: fs.table,
-      tableHeaderFontWeight: bold,
+      tableHeaderFontWeight: printWeight,
       fontFamily: 'SimSun',
       tableHeaderRowHeight: rowH + 4,
       tableBodyRowHeight: bodyRowH,
@@ -248,18 +250,27 @@ function buildPanel(size, options) {
     printElementType: { title: '表格', type: 'table' }
   })
 
-  // ---------------- 页脚：备注 / 签名 / 银行信息 ----------------
+  // ---------------- 页脚：备注+制单人+页码 / 送收货签名 / 银行信息 ----------------
   let fy = paperFooter + (compact ? 2 : 4)
 
+  // 页码由 hiprint 独立渲染，右侧给它留出固定栏位，三项处在同一条基线上。
+  const remarkW = Math.round(contentW * 0.58 * 100) / 100
+  const creatorW = Math.round(contentW * 0.22 * 100) / 100
+  const pageNoW = Math.round((contentW - remarkW - creatorW) * 100) / 100
   text({
-    left: margin, top: fy, width: contentW, height: rowH,
+    left: margin, top: fy, width: remarkW - 4, height: rowH,
     title: '备注', field: 'remark', fontSize: fs.footer, textContentVerticalAlign: 'middle'
   })
-  fy += rowH + 2
+  text({
+    left: margin + remarkW, top: fy, width: creatorW - 4, height: rowH,
+    title: '制单人', field: 'createBy', fontSize: fs.footer, textContentVerticalAlign: 'middle'
+  })
+  const pageNoTop = fy
+  const pageNoLeft = Math.round((margin + contentW - pageNoW) * 100) / 100
+  fy += metaBandH
 
-  // 签名区：标签在上，下面留一条签字线，中间的空白才是真正能写字的地方
+  // 送货人、收货人单独一行，各占一半；签字线贴近下沿，减少无效空白。
   const signCols = [
-    { title: '制单人', field: 'createBy', line: false },
     { title: '送货人', field: 'deliveryBy', line: true },
     { title: '收货人签字', field: 'receiveBy', line: true }
   ]
@@ -271,7 +282,7 @@ function buildPanel(size, options) {
       title: col.title, field: col.field, fontSize: fs.footer, textContentVerticalAlign: 'top'
     })
     if (col.line) {
-      hline({ left, top: fy + signBandH - 6, width: signW - 10, height: 1 })
+      hline({ left, top: fy + signBandH - 4, width: signW - 10, height: 1 })
     }
   })
   fy += signBandH
@@ -295,10 +306,9 @@ function buildPanel(size, options) {
     paperNumberDisabled: false,
     paperNumberContinue: true,
     paperNumberFormat: '第${paperNo}页/共${paperCount}页',
-    // 页码贴版心右边缘，跟着内容走，不跟纸张右边走
-    paperNumberLeft: Math.round(margin + contentW - mm(28)),
-    // 页码单独占页脚最后一行，页脚高度里已经给它留了 pageNoH，不会压住签名
-    paperNumberTop: Math.round(H - marginBottom - pageNoH + 2)
+    // 页码和备注、制单人同一行，固定在右侧栏位，不再占用签名区或额外页脚高度
+    paperNumberLeft: pageNoLeft,
+    paperNumberTop: pageNoTop
   }
 }
 
