@@ -29,7 +29,8 @@ export const useWmsStore = defineStore('wms', () => {
   const merchantMap = ref(new Map());
 
   const getMerchantList = () => {
-    listMerchantNoPage({}).then((res) => {
+    // 必须 return，否则 permission.js 里的 await 等不到，页面刚打开就打印会拿不到客户名
+    return listMerchantNoPage({}).then((res) => {
       merchantList.value = res.data;
       const map = new Map();
       merchantList.value.forEach((supplier) => {

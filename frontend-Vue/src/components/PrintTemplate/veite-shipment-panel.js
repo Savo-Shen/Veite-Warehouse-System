@@ -1,5 +1,3 @@
-import { PRINT_LOGO_URL } from '@/utils/print'
-
 /**
  * 威特送货单打印模板。
  *
@@ -47,8 +45,10 @@ const TABLE_COLUMNS = [
   { title: '金额(元)', field: 'amount', percent: 22, align: 'right', summary: 'sum', summaryNumFormat: 2 }
 ]
 
-function buildPanel(size) {
+function buildPanel(size, options) {
   const compact = size.compact
+  // 取不到 logo（接口不通/未部署）时直接不画，避免纸上留一个空白方框
+  const logo = options && options.logo
   const W = mm(size.width)
   const H = mm(size.height)
   const margin = mm(compact ? 4 : 8)
@@ -68,14 +68,16 @@ function buildPanel(size) {
   // ---------------- 页眉 ----------------
   let y = margin
 
-  elements.push({
-    options: {
-      left: margin, top: y,
-      width: mm(compact ? 30 : 38), height: mm(compact ? 12 : 16),
-      src: PRINT_LOGO_URL, fit: 'contain'
-    },
-    printElementType: { title: '图片', type: 'image' }
-  })
+  if (logo) {
+    elements.push({
+      options: {
+        left: margin, top: y,
+        width: mm(compact ? 30 : 38), height: mm(compact ? 12 : 16),
+        src: logo, fit: 'contain'
+      },
+      printElementType: { title: '图片', type: 'image' }
+    })
+  }
 
   text({
     left: margin, top: y, width: contentW, height: fs.company + 8,
@@ -252,9 +254,11 @@ function buildPanel(size) {
   }
 }
 
-/** 按纸张 key 生成打印模板 */
-export function buildVeiteShipmentPanel(sizeKey) {
-  return { panels: [buildPanel(getShipmentPaperSize(sizeKey))] }
+/**
+ * 按纸张 key 生成打印模板
+ * @param sizeKey 纸张 key
+ * @param options { logo } logo 的 base64，缺省则不打印 logo
+ */
+export function buildVeiteShipmentPanel(sizeKey, options) {
+  return { panels: [buildPanel(getShipmentPaperSize(sizeKey), options)] }
 }
-
-export default buildVeiteShipmentPanel(DEFAULT_SHIPMENT_PAPER_SIZE)
