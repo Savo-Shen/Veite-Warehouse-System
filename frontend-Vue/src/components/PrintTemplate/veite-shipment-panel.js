@@ -194,12 +194,10 @@ function buildPanel(size, options) {
   // 备注/签名区固定在纸张底部（paperFooter 以下即页脚区，每页重复）。
   // 让它跟着表格流动看起来更紧凑，但表格填满一页时签名会被挤到下一页，
   // 出现"最后一页只有签名、一行明细都没有"的孤儿页，所以这里固定。
-  // 底部三栏不是等分：最右侧固定放制单人和备注，两者左边缘对齐；
-  // 页码脱离信息栏，单独锚在版心右下角。送货人、收货人平分剩余空间。
-  const footerBandH = compact ? 45 : 48
-  const creatorRowH = compact ? 14 : 15
-  const pageNoH = compact ? 11 : 12
-  const remarkRowH = footerBandH - creatorRowH - pageNoH
+  // 底部只占两行：右侧第一行放备注，第二行让制单人与页码并排；
+  // 送货人、收货人的签字带同步压矮，不再为页码单独占第三层。
+  const footerBandH = compact ? 34 : 38
+  const footerRowH = footerBandH / 2
   const footerH = footerBandH + (compact ? 0 : rowH + 3) + 4
   const paperFooter = Math.round((H - marginBottom - footerH) * 100) / 100
 
@@ -253,7 +251,7 @@ function buildPanel(size, options) {
     printElementType: { title: '表格', type: 'table' }
   })
 
-  // ---------------- 页脚：送货人 / 收货人 / 制单人+备注；页码独立固定 ----------------
+  // ---------------- 页脚：送货人 / 收货人 / 备注；制单人+页码同排 ----------------
   let fy = paperFooter + (compact ? 2 : 4)
 
   const rightColW = mm(50)
@@ -275,17 +273,19 @@ function buildPanel(size, options) {
 
   const rightColLeft = Math.round((margin + signW * 2) * 100) / 100
   text({
-    left: rightColLeft, top: fy, width: rightColW - 4, height: creatorRowH,
+    left: rightColLeft, top: fy, width: rightColW - 4, height: footerRowH,
+    title: '备注', field: 'remark', fontSize: fs.footer,
+    textAlign: 'left', textContentVerticalAlign: 'middle'
+  })
+  const pageNoW = mm(26)
+  text({
+    left: rightColLeft, top: fy + footerRowH,
+    width: rightColW - pageNoW - 4, height: footerRowH,
     title: '制单人', field: 'createBy', fontSize: fs.footer,
     textAlign: 'left', textContentVerticalAlign: 'middle'
   })
-  text({
-    left: rightColLeft, top: fy + creatorRowH, width: rightColW - 4, height: remarkRowH,
-    title: '备注', field: 'remark', fontSize: fs.footer,
-    textAlign: 'left', textContentVerticalAlign: 'top'
-  })
-  const pageNoLeft = Math.round((margin + contentW - mm(28)) * 100) / 100
-  const pageNoTop = Math.round((fy + footerBandH - pageNoH) * 100) / 100
+  const pageNoLeft = Math.round((margin + contentW - pageNoW) * 100) / 100
+  const pageNoTop = Math.round((fy + footerRowH) * 100) / 100
   fy += footerBandH
 
   if (!compact) {
@@ -307,7 +307,7 @@ function buildPanel(size, options) {
     paperNumberDisabled: false,
     paperNumberContinue: true,
     paperNumberFormat: '第${paperNo}页/共${paperCount}页',
-    // 页码脱离信息栏，固定在版心最右下角
+    // 页码与制单人同排，固定贴住版心右边缘
     paperNumberLeft: pageNoLeft,
     paperNumberTop: pageNoTop
   }
