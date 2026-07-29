@@ -124,16 +124,17 @@ function buildPanel(size, options) {
     letterSpacing: compact ? 6 : 8, textAlign: 'center', textContentVerticalAlign: 'middle'
   })
 
-  // 右上角：地址/电话按"标签+内容"左对齐排，两行长度接近，能把右上角填满
+  // 右上角：电话在上、地址在下。地址不再重复显示“地址”标签，
+  // 给完整公司地址留足单行宽度，避免字号放大后换行。
   const sideLeft = Math.round((margin + contentW - sideW) * 100) / 100
   text({
     left: sideLeft, top: y + 3, width: sideW, height: fs.side + 5,
-    title: `地　址：${COMPANY_ADDRESS}`, fontSize: fs.side,
+    title: `电　话：${COMPANY_TEL.replace('TEL: ', '')}`, fontSize: fs.side,
     textContentVerticalAlign: 'middle'
   })
   text({
     left: sideLeft, top: y + fs.side + 11, width: sideW, height: fs.side + 5,
-    title: `电　话：${COMPANY_TEL.replace('TEL: ', '')}`, fontSize: fs.side,
+    title: COMPANY_ADDRESS, fontSize: fs.side,
     textContentVerticalAlign: 'middle'
   })
 
@@ -193,11 +194,11 @@ function buildPanel(size, options) {
   // 备注/签名区固定在纸张底部（paperFooter 以下即页脚区，每页重复）。
   // 让它跟着表格流动看起来更紧凑，但表格填满一页时签名会被挤到下一页，
   // 出现"最后一页只有签名、一行明细都没有"的孤儿页，所以这里固定。
-  // 第一行并排放备注、制单人、页码；第二行只留送货人和收货人。
-  // 签名带缩短后仍有横线可签，同时把此前单独给页码预留的高度还给商品表格。
-  const metaBandH = rowH + 3
-  const signBandH = compact ? 23 : 25
-  const footerH = metaBandH + signBandH + (compact ? 0 : rowH + 3) + 4
+  // 底部三栏：送货人、收货人各占一栏；最右栏纵向放制单人、备注、页码。
+  // 三项共用签名栏的高度，不再额外占一整行。
+  const footerBandH = compact ? 39 : 42
+  const footerMetaRowH = footerBandH / 3
+  const footerH = footerBandH + (compact ? 0 : rowH + 3) + 4
   const paperFooter = Math.round((H - marginBottom - footerH) * 100) / 100
 
   // ---------------- 商品表格 ----------------
@@ -250,31 +251,15 @@ function buildPanel(size, options) {
     printElementType: { title: '表格', type: 'table' }
   })
 
-  // ---------------- 页脚：备注+制单人+页码 / 送收货签名 / 银行信息 ----------------
+  // ---------------- 页脚：送货人 / 收货人 / 制单人+备注+页码 ----------------
   let fy = paperFooter + (compact ? 2 : 4)
 
-  // 页码由 hiprint 独立渲染，右侧给它留出固定栏位，三项处在同一条基线上。
-  const remarkW = Math.round(contentW * 0.58 * 100) / 100
-  const creatorW = Math.round(contentW * 0.22 * 100) / 100
-  const pageNoW = Math.round((contentW - remarkW - creatorW) * 100) / 100
-  text({
-    left: margin, top: fy, width: remarkW - 4, height: rowH,
-    title: '备注', field: 'remark', fontSize: fs.footer, textContentVerticalAlign: 'middle'
-  })
-  text({
-    left: margin + remarkW, top: fy, width: creatorW - 4, height: rowH,
-    title: '制单人', field: 'createBy', fontSize: fs.footer, textContentVerticalAlign: 'middle'
-  })
-  const pageNoTop = fy
-  const pageNoLeft = Math.round((margin + contentW - pageNoW) * 100) / 100
-  fy += metaBandH
-
-  // 送货人、收货人单独一行，各占一半；签字线贴近下沿，减少无效空白。
+  const rightColW = Math.round(contentW * 0.34 * 100) / 100
+  const signW = Math.round(((contentW - rightColW) / 2) * 100) / 100
   const signCols = [
     { title: '送货人', field: 'deliveryBy', line: true },
     { title: '收货人签字', field: 'receiveBy', line: true }
   ]
-  const signW = Math.round((contentW / signCols.length) * 100) / 100
   signCols.forEach((col, idx) => {
     const left = Math.round((margin + signW * idx) * 100) / 100
     text({
@@ -282,10 +267,22 @@ function buildPanel(size, options) {
       title: col.title, field: col.field, fontSize: fs.footer, textContentVerticalAlign: 'top'
     })
     if (col.line) {
-      hline({ left, top: fy + signBandH - 4, width: signW - 10, height: 1 })
+      hline({ left, top: fy + footerBandH - 4, width: signW - 10, height: 1 })
     }
   })
-  fy += signBandH
+
+  const rightColLeft = Math.round((margin + signW * 2) * 100) / 100
+  text({
+    left: rightColLeft, top: fy, width: rightColW - 4, height: footerMetaRowH,
+    title: '制单人', field: 'createBy', fontSize: fs.footer, textContentVerticalAlign: 'middle'
+  })
+  text({
+    left: rightColLeft, top: fy + footerMetaRowH, width: rightColW - 4, height: footerMetaRowH,
+    title: '备注', field: 'remark', fontSize: fs.footer, textContentVerticalAlign: 'middle'
+  })
+  const pageNoLeft = rightColLeft
+  const pageNoTop = Math.round((fy + footerMetaRowH * 2) * 100) / 100
+  fy += footerBandH
 
   if (!compact) {
     text({
@@ -306,7 +303,7 @@ function buildPanel(size, options) {
     paperNumberDisabled: false,
     paperNumberContinue: true,
     paperNumberFormat: '第${paperNo}页/共${paperCount}页',
-    // 页码和备注、制单人同一行，固定在右侧栏位，不再占用签名区或额外页脚高度
+    // 页码放在最右栏第三行，与制单人、备注纵向排列
     paperNumberLeft: pageNoLeft,
     paperNumberTop: pageNoTop
   }
