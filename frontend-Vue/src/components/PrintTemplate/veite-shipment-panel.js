@@ -194,7 +194,8 @@ function buildPanel(size, options) {
   // 备注/签名区固定在纸张底部（paperFooter 以下即页脚区，每页重复）。
   // 让它跟着表格流动看起来更紧凑，但表格填满一页时签名会被挤到下一页，
   // 出现"最后一页只有签名、一行明细都没有"的孤儿页，所以这里固定。
-  // 底部三栏：送货人、收货人各占一栏；最右栏纵向放制单人、备注、页码。
+  // 底部三栏不是等分：最右侧用固定宽度的小块纵向放制单人、备注、页码，
+  // 并锚在版心最右下角；送货人、收货人平分剩余空间。
   // 三项共用签名栏的高度，不再额外占一整行。
   const footerBandH = compact ? 39 : 42
   const footerMetaRowH = footerBandH / 3
@@ -254,7 +255,7 @@ function buildPanel(size, options) {
   // ---------------- 页脚：送货人 / 收货人 / 制单人+备注+页码 ----------------
   let fy = paperFooter + (compact ? 2 : 4)
 
-  const rightColW = Math.round(contentW * 0.34 * 100) / 100
+  const rightColW = mm(42)
   const signW = Math.round(((contentW - rightColW) / 2) * 100) / 100
   const signCols = [
     { title: '送货人', field: 'deliveryBy', line: true },
@@ -274,13 +275,15 @@ function buildPanel(size, options) {
   const rightColLeft = Math.round((margin + signW * 2) * 100) / 100
   text({
     left: rightColLeft, top: fy, width: rightColW - 4, height: footerMetaRowH,
-    title: '制单人', field: 'createBy', fontSize: fs.footer, textContentVerticalAlign: 'middle'
+    title: '制单人', field: 'createBy', fontSize: fs.footer,
+    textAlign: 'right', textContentVerticalAlign: 'middle'
   })
   text({
     left: rightColLeft, top: fy + footerMetaRowH, width: rightColW - 4, height: footerMetaRowH,
-    title: '备注', field: 'remark', fontSize: fs.footer, textContentVerticalAlign: 'middle'
+    title: '备注', field: 'remark', fontSize: fs.footer,
+    textAlign: 'right', textContentVerticalAlign: 'middle'
   })
-  const pageNoLeft = rightColLeft
+  const pageNoLeft = Math.round((margin + contentW - mm(28)) * 100) / 100
   const pageNoTop = Math.round((fy + footerMetaRowH * 2) * 100) / 100
   fy += footerBandH
 
