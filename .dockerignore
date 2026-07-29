@@ -1,0 +1,15 @@
+.git
+.DS_Store
+.codex
+.playwright-cli
+.pnpm-store
+**/node_modules
+**/target
+**/dist
+logs
+recovery
+*.log
+backend/.env
+.env.docker
+*.env.local
+application-local.yml
