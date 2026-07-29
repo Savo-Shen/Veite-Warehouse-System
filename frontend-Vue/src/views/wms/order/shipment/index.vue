@@ -262,7 +262,13 @@
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:shipment:all']" :disabled="scope.row.orderStatus === 1">删除</el-button>
                 </template>
               </el-popover>
-              <el-button link type="primary" @click="handlePrint(scope.row)" v-hasPermi="['wms:shipment:all']">打印</el-button>
+              <el-button
+                link
+                type="primary"
+                v-hasPermi="['wms:shipment:all']"
+                :loading="printingId === scope.row.id"
+                @click="handlePrint(scope.row)"
+              >打印</el-button>
             </div>
           </template>
         </el-table-column>
@@ -304,16 +310,120 @@
         />
       </el-row>
     </el-card>
+
+    <!-- 打印前手动校对/调整 -->
+    <el-dialog v-model="printDialogVisible" title="打印送货单" width="900px" top="5vh" append-to-body>
+      <el-form :model="printForm" label-width="86px" @submit.prevent>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="打印纸张">
+              <el-select v-model="paperSizeKey" style="width: 100%;">
+                <el-option v-for="size in SHIPMENT_PAPER_SIZES" :key="size.key" :label="size.name" :value="size.key" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="日期">
+              <el-input v-model="printForm.createTime" placeholder="打印在单据上的日期" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="送货单号">
+              <el-input v-model="printForm.orderNo" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="业务单号">
+              <el-input v-model="printForm.bizOrderNo" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="客户">
+              <el-input v-model="printForm.merchantName" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="联系电话">
+              <el-input v-model="printForm.merchantPhone" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="送货地址">
+              <el-input v-model="printForm.merchantAddress" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item label="备注">
+              <el-input v-model="printForm.remark" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="制单人">
+              <el-input v-model="printForm.createBy" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="送货人">
+              <el-input v-model="printForm.deliveryBy" placeholder="留空则打印空白待手写" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="收货人签字">
+              <el-input v-model="printForm.receiveBy" placeholder="留空则打印空白待手写" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+
+      <el-table :data="printRows" size="small" border max-height="300">
+        <el-table-column type="index" label="序号" width="60" align="center" />
+        <el-table-column label="商品名称">
+          <template #default="scope"><el-input v-model="scope.row.itemName" size="small" /></template>
+        </el-table-column>
+        <el-table-column label="规格名称">
+          <template #default="scope"><el-input v-model="scope.row.skuName" size="small" /></template>
+        </el-table-column>
+        <el-table-column label="数量" width="110">
+          <template #default="scope"><el-input v-model="scope.row.quantity" size="small" /></template>
+        </el-table-column>
+        <el-table-column label="金额(元)" width="120">
+          <template #default="scope"><el-input v-model="scope.row.amount" size="small" /></template>
+        </el-table-column>
+        <el-table-column label="操作" width="70" align="center">
+          <template #default="scope">
+            <el-button link type="danger" @click="printRows.splice(scope.$index, 1)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="mt10">
+        <el-button link type="primary" @click="printRows.push({ itemName: '', skuName: '', quantity: '', amount: '' })">
+          + 添加一行
+        </el-button>
+        <span style="color: #909399; font-size: 12px; margin-left: 12px;">
+          明细不足 {{ currentPaperSize.minRows }} 行时会自动补空白行；删掉内容留空行也可以，打印出来就是空格子。
+        </span>
+      </div>
+
+      <template #footer>
+        <el-button @click="printDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="doPrint">打印</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ShipmentOrder">
 import {listShipmentOrder, delShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
 import {listByShipmentOrderId} from "@/api/wms/shipmentOrderDetail";
-import {getCurrentInstance, reactive, ref, toRefs, onMounted, onBeforeUnmount} from "vue";
+import {getCurrentInstance, reactive, ref, computed, toRefs, onMounted, onBeforeUnmount} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
-import shipmentPanel from "@/components/PrintTemplate/shipment-panel";
-import veiteShipmentPanel from "@/components/PrintTemplate/veite-Shipment-panel";
+import {
+  buildVeiteShipmentPanel,
+  SHIPMENT_PAPER_SIZES,
+  DEFAULT_SHIPMENT_PAPER_SIZE,
+  getShipmentPaperSize
+} from "@/components/PrintTemplate/veite-shipment-panel";
+import { printStyleHandler } from "@/utils/print";
 import OrderImageGallery from "@/components/OrderImageGallery";
 
 const { proxy } = getCurrentInstance();
@@ -331,6 +441,16 @@ const expandedRowKeys = ref([])
 const detailLoading = ref([])
 // 高级搜索面板是否展开（默认仅显示综合搜索）
 const advancedSearchVisible = ref(false)
+// 打印纸张：记住上次选择
+const PAPER_SIZE_STORAGE_KEY = 'wms:shipment:paperSize'
+const paperSizeKey = ref(localStorage.getItem(PAPER_SIZE_STORAGE_KEY) || DEFAULT_SHIPMENT_PAPER_SIZE)
+const currentPaperSize = computed(() => getShipmentPaperSize(paperSizeKey.value))
+// 正在打印的出库单id，避免重复点击
+const printingId = ref(null)
+// 打印前校对弹窗
+const printDialogVisible = ref(false)
+const printForm = ref({})
+const printRows = ref([])
 const data = reactive({
   queryParams: {
     pageNum: 1,
@@ -424,44 +544,73 @@ function handleGoDetail(row) {
   }
 }
 
-/** 导出按钮操作 */
-async function handlePrint(row) {
-  const res = await getShipmentOrder(row.id)
-  const shipmentOrder = res.data
-  let table = []
-  if (shipmentOrder.details?.length) {
-    table = shipmentOrder.details.map(detail => {
+/** 打印送货单：先拉单据数据，填进弹窗给用户校对/手改，确认后再出纸 */
+async function handlePrint(row, sizeKey) {
+  if (printingId.value) {
+    return
+  }
+  if (sizeKey) {
+    paperSizeKey.value = sizeKey
+    localStorage.setItem(PAPER_SIZE_STORAGE_KEY, sizeKey)
+  }
+  printingId.value = row.id
+  try {
+    const res = await getShipmentOrder(row.id)
+    const shipmentOrder = res.data
+    const merchant = useWmsStore().merchantMap.get(shipmentOrder.merchantId)
+    printForm.value = {
+      orderNo: shipmentOrder.orderNo || '',
+      bizOrderNo: shipmentOrder.bizOrderNo || '',
+      merchantName: merchant?.merchantName || '',
+      merchantPhone: merchant?.mobile || merchant?.tel || '',
+      merchantAddress: merchant?.address || '',
+      createBy: shipmentOrder.createBy || '',
+      createTime: proxy.parseTime(shipmentOrder.createTime, '{y}-{m}-{d}') || '',
+      remark: shipmentOrder.remark || '',
+      deliveryBy: '',
+      receiveBy: ''
+    }
+    printRows.value = (shipmentOrder.details || []).map(detail => {
       return {
-        itemName: detail.item.itemName,
-        skuName: detail.itemSku.skuName,
-        quantity: Number(detail.quantity).toFixed(0),
-        amount: detail.amount
+        itemName: detail.item?.itemName || '',
+        skuName: detail.itemSku?.skuName || '',
+        quantity: Number(detail.quantity || 0).toFixed(0),
+        amount: Number(detail.amount || 0).toFixed(2)
       }
     })
+    printDialogVisible.value = true
+  } catch (e) {
+    console.error(e)
+    proxy.$modal.msgError('打印失败：' + (e?.msg || e?.message || '请稍后重试'))
+  } finally {
+    printingId.value = null
   }
-  const printData = {
-    orderNo: shipmentOrder.orderNo,
-    optType: proxy.selectDictLabel(wms_shipment_type.value, shipmentOrder.optType),
-    orderStatus: proxy.selectDictLabel(wms_shipment_status.value, shipmentOrder.orderStatus),
-    merchantName: useWmsStore().merchantMap.get(shipmentOrder.merchantId)?.merchantName,
-    bizOrderNo: shipmentOrder.bizOrderNo,
-    warehouseName: useWmsStore().warehouseMap.get(shipmentOrder.warehouseId)?.warehouseName,
-    totalQuantity: Number(shipmentOrder.totalQuantity).toFixed(0),
-    totalAmount: ((shipmentOrder.totalAmount || shipmentOrder.totalAmount === 0) ? (shipmentOrder.totalAmount + '元') : ''),
-    createBy: shipmentOrder.createBy,
-    createTime: proxy.parseTime(shipmentOrder.createTime, '{mm}-{dd} {hh}:{ii}'),
-    updateBy: shipmentOrder.updateBy,
-    updateTime: proxy.parseTime(shipmentOrder.updateTime, '{mm}-{dd} {hh}:{ii}'),
-    remark: shipmentOrder.remark,
-    table
-  }
-  // let printTemplate = new proxy.$hiprint.PrintTemplate({template: shipmentPanel})
-  let printTemplate = new proxy.$hiprint.PrintTemplate({template: veiteShipmentPanel})
-  printTemplate.print(printData, {}, {
-    styleHandler: () => {
-      return '<link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">';
-    }
+}
+
+/** 弹窗确认后真正出纸 */
+function doPrint() {
+  localStorage.setItem(PAPER_SIZE_STORAGE_KEY, paperSizeKey.value)
+  const minRows = currentPaperSize.value.minRows || 0
+  let no = 0
+  const rows = printRows.value.map(row => {
+    const empty = !row.itemName && !row.skuName && !row.quantity && !row.amount
+    // 整行留空的就打成空格子，不占序号，方便手写补货
+    return empty ? { index: '', itemName: '', skuName: '', quantity: '', amount: '' } : { ...row, index: ++no }
   })
+  // 明细不足时补空白行，单据看起来是画好格子的完整表
+  while (rows.length < minRows) {
+    rows.push({ index: '', itemName: '', skuName: '', quantity: '', amount: '' })
+  }
+  try {
+    const printTemplate = new proxy.$hiprint.PrintTemplate({
+      template: buildVeiteShipmentPanel(paperSizeKey.value)
+    })
+    printTemplate.print({ ...printForm.value, table: rows }, {}, { styleHandler: printStyleHandler })
+    printDialogVisible.value = false
+  } catch (e) {
+    console.error(e)
+    proxy.$modal.msgError('打印失败：' + (e?.msg || e?.message || '请稍后重试'))
+  }
 }
 
 
