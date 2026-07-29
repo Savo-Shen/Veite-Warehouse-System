@@ -27,9 +27,9 @@ const BANK_INFO = '开户行：工商银行　　户名：余惠萍　　卡号�
  * marginLeft / contentWidth / marginTop / marginBottom：版心(mm)。
  *   针式连续纸的可打印区不是以纸张居中的，而是从纸左边缘起算的固定宽度
  *   （80列针打一般是 8 英寸 ≈ 203mm），超过这个位置打印头够不到，右边就被截掉。
- *   同时左边 12.7mm(0.5英寸) 是走纸孔边条，撕掉后就没了，内容不能压上去。
- *   所以版心必须落在 [12.7mm, 203mm] 这条带子里：左边距 14mm + 内容宽 188mm
- *   = 右边缘 202mm，两头都留了余量。
+ *   左边 12.7mm 是走纸孔边条，但走纸孔本身只到离纸边约 8.4mm
+ *   （孔心 6.35mm、孔径 4mm），实际用整张纸不撕边条，所以左边距取 9mm 就够，
+ *   刚好避开孔位又不浪费版面。右边缘 202mm 卡在 203mm 打印极限内。
  */
 export const SHIPMENT_PAPER_SIZES = [
   {
@@ -39,7 +39,7 @@ export const SHIPMENT_PAPER_SIZES = [
   },
   {
     key: 'triple-241x140', name: '针式二等分 (241×140mm)', width: 241, height: 140,
-    marginLeft: 14, contentWidth: 188, marginTop: 7, marginBottom: 11,
+    marginLeft: 9, contentWidth: 193, marginTop: 4, marginBottom: 11,
     compact: true, autoCompletion: false, minRows: 5
   }
 ]
@@ -75,8 +75,8 @@ function buildPanel(size, options) {
   const contentW = mm(size.contentWidth)
 
   const fs = compact
-    ? { company: 15, title: 15, info: 10, table: 10, footer: 9.5 }
-    : { company: 19, title: 16, info: 11, table: 11, footer: 10.5 }
+    ? { company: 13, title: 19, side: 8.5, info: 10, table: 10, footer: 9.5 }
+    : { company: 16, title: 24, side: 9.5, info: 11, table: 11, footer: 10.5 }
   const rowH = compact ? 15 : 17
   // 表格正文行高，针式纸也要留够手写和复写的空间
   const bodyRowH = compact ? 20 : 24
@@ -84,43 +84,49 @@ function buildPanel(size, options) {
   const elements = []
   const text = (options) => elements.push({ options, printElementType: { type: 'text' } })
 
-  // ---------------- 页眉 ----------------
+  // ---------------- 页眉：左 logo / 中 公司名+大标题 / 右 地址电话 ----------------
   let y = marginY
+
+  const logoW = mm(compact ? 46 : 54)
+  const logoH = mm(compact ? 15 : 19)
+  const sideW = mm(compact ? 58 : 68)
+  const centerLeft = margin + logoW + mm(3)
+  const centerW = Math.round((contentW - logoW - sideW - mm(6)) * 100) / 100
 
   if (logo) {
     elements.push({
-      options: {
-        left: margin, top: y,
-        width: mm(compact ? 42 : 50), height: mm(compact ? 13 : 18),
-        src: logo, fit: 'contain'
-      },
+      options: { left: margin, top: y, width: logoW, height: logoH, src: logo, fit: 'contain' },
       printElementType: { title: '图片', type: 'image' }
     })
   }
 
   text({
-    left: margin, top: y, width: contentW, height: fs.company + 8,
-    title: compact ? `${COMPANY_NAME}　送货单` : COMPANY_NAME,
-    fontSize: fs.company, fontWeight: '600', letterSpacing: compact ? 0.5 : 1.5,
+    left: centerLeft, top: y, width: centerW, height: fs.company + 6,
+    title: COMPANY_NAME, fontSize: fs.company, fontWeight: '600', letterSpacing: 1,
     textAlign: 'center', textContentVerticalAlign: 'middle'
   })
-  y += fs.company + 10
 
   text({
-    left: margin, top: y, width: contentW, height: fs.info + 4,
-    title: `${COMPANY_ADDRESS}　　${COMPANY_TEL}`,
-    fontSize: compact ? 8.5 : 9, textAlign: 'center', textContentVerticalAlign: 'middle'
+    left: centerLeft, top: y + fs.company + 8, width: centerW, height: fs.title + 8,
+    title: '送 货 单', fontFamily: 'SimSun', fontSize: fs.title, fontWeight: '600',
+    letterSpacing: compact ? 4 : 6, textAlign: 'center', textContentVerticalAlign: 'middle'
   })
-  y += fs.info + 6
 
-  if (!compact) {
-    text({
-      left: margin, top: y, width: contentW, height: fs.title + 10,
-      title: '送 货 单', fontFamily: 'SimSun', fontSize: fs.title, fontWeight: '600',
-      letterSpacing: 6, textAlign: 'center', textContentVerticalAlign: 'middle'
-    })
-    y += fs.title + 12
-  }
+  // 右上角：公司地址、电话，右对齐贴版心右边缘
+  const sideLeft = Math.round((margin + contentW - sideW) * 100) / 100
+  text({
+    left: sideLeft, top: y + 2, width: sideW, height: fs.side + 4,
+    title: COMPANY_ADDRESS, fontSize: fs.side,
+    textAlign: 'right', textContentVerticalAlign: 'middle'
+  })
+  text({
+    left: sideLeft, top: y + fs.side + 8, width: sideW, height: fs.side + 4,
+    title: COMPANY_TEL, fontSize: fs.side,
+    textAlign: 'right', textContentVerticalAlign: 'middle'
+  })
+
+  // 页眉整体高度取 logo 和中间标题块里更高的那个
+  y += Math.max(logoH, fs.company + fs.title + 18) + (compact ? 4 : 8)
 
   // 单据信息：先单据（单号/日期/业务单号），再收货方（客户/电话/地址）
   const infoRows = compact
