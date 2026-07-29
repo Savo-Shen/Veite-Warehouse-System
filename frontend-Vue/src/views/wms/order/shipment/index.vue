@@ -423,7 +423,7 @@ import {
   DEFAULT_SHIPMENT_PAPER_SIZE,
   getShipmentPaperSize
 } from "@/components/PrintTemplate/veite-shipment-panel";
-import { printStyleHandler } from "@/utils/print";
+import { printStyleHandler, loadPrintLogo } from "@/utils/print";
 import OrderImageGallery from "@/components/OrderImageGallery";
 
 const { proxy } = getCurrentInstance();
@@ -557,7 +557,12 @@ async function handlePrint(row, sizeKey) {
   try {
     const res = await getShipmentOrder(row.id)
     const shipmentOrder = res.data
-    const merchant = useWmsStore().merchantMap.get(shipmentOrder.merchantId)
+    const wmsStore = useWmsStore()
+    // 页面刚打开就点打印时往来单位可能还没加载完，先补一次，否则客户名是空的
+    if (!wmsStore.merchantMap.size) {
+      await wmsStore.getMerchantList()
+    }
+    const merchant = wmsStore.merchantMap.get(shipmentOrder.merchantId)
     printForm.value = {
       orderNo: shipmentOrder.orderNo || '',
       bizOrderNo: shipmentOrder.bizOrderNo || '',
@@ -588,7 +593,7 @@ async function handlePrint(row, sizeKey) {
 }
 
 /** 弹窗确认后真正出纸 */
-function doPrint() {
+async function doPrint() {
   localStorage.setItem(PAPER_SIZE_STORAGE_KEY, paperSizeKey.value)
   const minRows = currentPaperSize.value.minRows || 0
   let no = 0
@@ -602,8 +607,11 @@ function doPrint() {
     rows.push({ index: '', itemName: '', skuName: '', quantity: '', amount: '' })
   }
   try {
+    // 先在主页面把 logo 取成 base64，交给 hiprint 的打印 iframe，
+    // 免得图片没加载完就触发打印，纸上留一个空白方框
+    const logo = await loadPrintLogo()
     const printTemplate = new proxy.$hiprint.PrintTemplate({
-      template: buildVeiteShipmentPanel(paperSizeKey.value)
+      template: buildVeiteShipmentPanel(paperSizeKey.value, { logo })
     })
     printTemplate.print({ ...printForm.value, table: rows }, {}, { styleHandler: printStyleHandler })
     printDialogVisible.value = false
