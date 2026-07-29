@@ -113,6 +113,8 @@ public class DbAlignService {
     private static final String MENU_TAG_Q = "INSERT INTO `sys_menu` VALUES (1940000000000000002, '标签查询', 1940000000000000001, 1, '', NULL, NULL, 0, 0, 'F', '1', '1', 'wms:itemTag:list', '#', 'admin', NOW(), 'admin', NOW(), '')";
     private static final String MENU_TAG_E = "INSERT INTO `sys_menu` VALUES (1940000000000000003, '标签编辑', 1940000000000000001, 2, '', NULL, NULL, 0, 0, 'F', '1', '1', 'wms:itemTag:edit', '#', 'admin', NOW(), 'admin', NOW(), '')";
     private static final String MENU_DBALIGN = "INSERT INTO `sys_menu` VALUES (1940000000000000010, '数据库对齐', 1808758090157985794, 9, 'dbAlign', 'wms/tool/dbAlign/index', NULL, 0, 0, 'C', '1', '1', 'wms:tool:dbAlign', 'set-up', 'admin', NOW(), 'admin', NOW(), '数据库对齐工具')";
+    private static final String MENU_DBBACKUP = "INSERT INTO `sys_menu` VALUES (1940000000000000011, '数据库备份', 1808758090157985794, 10, 'dbBackup', 'wms/tool/dbBackup/index', NULL, 0, 0, 'C', '1', '1', 'wms:tool:dbBackup', 'download', 'admin', NOW(), 'admin', NOW(), '数据库备份工具')";
+    private static final String MENU_DBIMPORT = "INSERT INTO `sys_menu` VALUES (1940000000000000012, '数据库导入', 1808758090157985794, 11, 'dbImport', 'wms/tool/dbImport/index', NULL, 0, 0, 'C', '1', '1', 'wms:tool:dbImport', 'upload', 'admin', NOW(), 'admin', NOW(), '数据库合并导入工具')";
 
     private List<Step> steps() {
         List<Step> steps = new ArrayList<>();
@@ -134,6 +136,8 @@ public class DbAlignService {
         steps.add(new Step("菜单-标签查询", "菜单", () -> menuExists(1940000000000000002L), List.of(MENU_TAG_Q)));
         steps.add(new Step("菜单-标签编辑", "菜单", () -> menuExists(1940000000000000003L), List.of(MENU_TAG_E)));
         steps.add(new Step("菜单-数据库对齐", "菜单", () -> menuExists(1940000000000000010L), List.of(MENU_DBALIGN)));
+        steps.add(new Step("菜单-数据库备份", "菜单", () -> menuExists(1940000000000000011L), List.of(MENU_DBBACKUP)));
+        steps.add(new Step("菜单-数据库导入", "菜单", () -> menuExists(1940000000000000012L), List.of(MENU_DBIMPORT)));
         return steps;
     }
 

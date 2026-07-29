@@ -193,6 +193,7 @@ import {getCurrentInstance, reactive, ref, toRefs, onMounted, onBeforeUnmount} f
 import {useWmsStore} from "../../../../store/modules/wms";
 import {ElMessageBox} from "element-plus";
 import movementPanel from "@/components/PrintTemplate/movement-panel";
+import { printStyleHandler } from "@/utils/print";
 
 const { proxy } = getCurrentInstance();
 const { wms_movement_status } = proxy.useDict("wms_movement_status");
@@ -323,13 +324,7 @@ async function handlePrint(row) {
     table
   }
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: movementPanel})
-  printTemplate.print(printData, {}, {
-    styleHandler: () => {
-      let css = '<link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">';
-      console.info("css:", css)
-      return css
-    }
-  })
+  printTemplate.print(printData, {}, { styleHandler: printStyleHandler })
 }
 
 

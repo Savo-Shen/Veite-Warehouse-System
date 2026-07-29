@@ -1,30 +1,43 @@
 package com.ruoyi.wms.controller;
 
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.InputStream;
+import java.time.Duration;
 
+/**
+ * 打印模板用到的图片
+ */
 @RestController
 @RequestMapping("/wms/image")
 public class ImageController {
 
+    private static final String LOGO_LOCATION = "static/images/veite.png";
+
+    /**
+     * 打印模板的公司logo，从 classpath 读取，不依赖部署机器的绝对路径
+     */
     @GetMapping(value = "/logo", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> getLogo() throws IOException {
-        // 读取本地文件（你可以根据实际路径调整）
-        Path path = Paths.get("/Users/savo_shen/Programs/仓库出入库管理系统/wms-ruoyi/ruoyi-admin-wms/src/main/resources/static/images/veite.png"); // 修改为你 logo.png 的实际路径
-        byte[] imageBytes = Files.readAllBytes(path);
-
+        ClassPathResource resource = new ClassPathResource(LOGO_LOCATION);
+        if (!resource.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+        byte[] imageBytes;
+        try (InputStream in = resource.getInputStream()) {
+            imageBytes = in.readAllBytes();
+        }
         return ResponseEntity
                 .ok()
                 .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(7)).cachePublic())
                 .body(imageBytes);
     }
 }

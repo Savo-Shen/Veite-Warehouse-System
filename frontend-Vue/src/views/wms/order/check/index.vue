@@ -157,6 +157,7 @@ import {useWmsStore} from "../../../../store/modules/wms";
 import {ElMessageBox} from "element-plus";
 import checkPanel from "@/components/PrintTemplate/check-panel";
 import CheckOrderDetail from "@/views/wms/order/check/CheckOrderDetail.vue";
+import { printStyleHandler } from "@/utils/print";
 const { proxy } = getCurrentInstance();
 const {wms_check_status} = proxy.useDict("wms_check_status");
 const checkOrderList = ref([]);
@@ -272,12 +273,7 @@ async function handlePrint(row) {
     table
   }
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: checkPanel})
-  printTemplate.print(printData, {}, {
-    styleHandler: () => {
-      let css = '<link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">';
-      return css
-    }
-  })
+  printTemplate.print(printData, {}, { styleHandler: printStyleHandler })
 }
 
 function getRowKey(row) {

@@ -285,6 +285,7 @@ import {listByReceiptOrderId} from "@/api/wms/receiptOrderDetail";
 import {ElMessageBox} from "element-plus";
 import receiptPanel from "@/components/PrintTemplate/receipt-panel";
 import OrderImageGallery from "@/components/OrderImageGallery";
+import { printStyleHandler } from "@/utils/print";
 
 const { proxy } = getCurrentInstance();
 const { wms_receipt_status, wms_receipt_type } = proxy.useDict("wms_receipt_status", "wms_receipt_type");
@@ -421,11 +422,7 @@ async function handlePrint(row) {
     table
   }
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: receiptPanel})
-  printTemplate.print(printData, {}, {
-    styleHandler: () => {
-      return '<link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">'
-    }
-  })
+  printTemplate.print(printData, {}, { styleHandler: printStyleHandler })
 }
 
 

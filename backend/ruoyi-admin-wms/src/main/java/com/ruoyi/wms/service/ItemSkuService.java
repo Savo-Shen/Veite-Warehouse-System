@@ -202,7 +202,11 @@ public class ItemSkuService extends ServiceImpl<ItemSkuMapper, ItemSku> {
             Map<Long, ItemSkuMapVo> itemSkuMap = this.queryItemSkuMapVosByIds(skuIds);
 
             details.forEach(detail -> {
+                    // sku可能已被删除，历史单据查询/打印时不能因此报错
                     ItemSkuMapVo vo = itemSkuMap.get(detail.getSkuId());
+                    if (vo == null) {
+                        return;
+                    }
                     detail.setItemSku(vo.getItemSku());
                     detail.setItem(vo.getItem());
             });

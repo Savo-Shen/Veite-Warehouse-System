@@ -1,0 +1,93 @@
+name: wms
+
+services:
+  mysql:
+    profiles: ["local-db"]
+    image: mysql:8.4
+    container_name: wms-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - wms_mysql_data:/var/lib/mysql
+    networks:
+      - wms
+
+  redis:
+    image: redis:7-alpine
+    container_name: wms-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - wms_redis_data:/data
+    networks:
+      - wms
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  wms-backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: wms-backend
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "8080"
+    volumes:
+      - wms_backend_logs:/app/logs
+      - wms_backend_backups:/app/backups
+    networks:
+      - wms
+
+  wms-db-backup:
+    build:
+      context: .
+      dockerfile: docker/db-backup.Dockerfile
+    container_name: wms-db-backup
+    restart: unless-stopped
+    user: "1000:1000"
+    env_file:
+      - .env.docker
+    environment:
+      BACKUP_DIR: /backups
+    volumes:
+      - wms_backend_backups:/backups
+    depends_on:
+      - wms-backend
+    networks:
+      - wms
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: wms-nginx
+    restart: unless-stopped
+    depends_on:
+      - wms-backend
+    ports:
+      - "80:80"
+    networks:
+      - wms
+
+networks:
+  wms:
+    driver: bridge
+
+volumes:
+  wms_mysql_data:
+  wms_redis_data:
+  wms_backend_logs:
+  wms_backend_backups:
