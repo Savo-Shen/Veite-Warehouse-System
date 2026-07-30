@@ -85,10 +85,19 @@ function buildPanel(size, options) {
   const printWeight = '600'
 
   const elements = []
-  const text = (options) => elements.push({
-    options: { fontFamily: 'SimSun', fontWeight: printWeight, ...options },
-    printElementType: { type: 'text' }
-  })
+  const text = (options) => {
+    const { allowWrap, ...textOptions } = options
+    const normalized = {
+      fontFamily: 'SimSun',
+      fontWeight: printWeight,
+      // 编号、电话、签名等默认不换行，避免固定高度内出现两行互相挤压。
+      textContentWrap: 'nowrap',
+      ...textOptions
+    }
+    // 只有明确预留了两行高度的字段才允许自然换行。
+    if (allowWrap) delete normalized.textContentWrap
+    elements.push({ options: normalized, printElementType: { type: 'text' } })
+  }
   const hline = (o) => elements.push({
     options: { ...o, borderWidth: 0.75 },
     printElementType: { title: '横线', type: 'hline' }
@@ -145,15 +154,15 @@ function buildPanel(size, options) {
   const infoRows = compact
     ? [
       [
-        { title: '送货单号', field: 'orderNo', span: 40 },
-        { title: '日期', field: 'createTime', span: 26 },
-        { title: '业务单号', field: 'bizOrderNo', span: 34 }
+        { title: '送货单号', field: 'orderNo', span: 26 },
+        { title: '日期', field: 'createTime', span: 29 },
+        { title: '业务单号', field: 'bizOrderNo', span: 45 }
       ],
       [
-        { title: '客户', field: 'merchantName', span: 40 },
-        { title: '联系电话', field: 'merchantPhone', span: 26 },
-        // 地址最长，放最后一格并给足宽度
-        { title: '送货地址', field: 'merchantAddress', span: 34 }
+        { title: '客户', field: 'merchantName', span: 26 },
+        { title: '联系电话', field: 'merchantPhone', span: 29 },
+        // 地址最长，优先分配宽度；仍保留两行高度兜底
+        { title: '送货地址', field: 'merchantAddress', span: 45 }
       ]
     ]
     : [
@@ -174,19 +183,43 @@ function buildPanel(size, options) {
       ]
     ]
 
+  const wrapFields = new Set(['merchantName', 'merchantAddress'])
+  const wrappedInfoRowH = compact ? 30 : 32
+  const wrappedInfoLineH = compact ? 13.5 : 15
   infoRows.forEach((row) => {
+    // 客户名和送货地址所在行预留两行高度并明确设置行距；
+    // 其余编号、日期、电话等保持单行，避免无意义换行。
+    const rowAllowsWrap = row.some(col => wrapFields.has(col.field))
+    const currentRowH = rowAllowsWrap ? wrappedInfoRowH : rowH
+    const rowVerticalAlign = rowAllowsWrap ? 'top' : 'middle'
     const totalSpan = row.reduce((sum, col) => sum + (col.span || 1), 0)
     let x = margin
     row.forEach((col) => {
       const colW = Math.round((contentW * (col.span || 1) / totalSpan) * 100) / 100
+      const allowWrap = wrapFields.has(col.field)
+      // 标签和内容分成两个元素。内容换行后会从自身左边缘继续，
+      // 形成悬挂缩进，不会回到“送货地址：”或“客户：”的下方。
+      const labelW = Math.min(
+        Math.round(colW * 0.45 * 100) / 100,
+        Math.round((col.title.length + 1) * fs.info * 100) / 100
+      )
       text({
-        left: x, top: y, width: colW - 4, height: rowH,
-        title: col.title, field: col.field,
-        fontSize: fs.info, textContentVerticalAlign: 'middle'
+        left: x, top: y, width: labelW, height: currentRowH,
+        title: `${col.title}：`,
+        fontSize: fs.info,
+        textContentVerticalAlign: rowVerticalAlign
+      })
+      text({
+        left: x + labelW, top: y, width: colW - labelW - 4, height: currentRowH,
+        title: col.title, field: col.field, hideTitle: true,
+        fontSize: fs.info,
+        allowWrap,
+        ...(allowWrap ? { lineHeight: wrappedInfoLineH } : {}),
+        textContentVerticalAlign: rowVerticalAlign
       })
       x = Math.round((x + colW) * 100) / 100
     })
-    y += rowH
+    y += currentRowH
   })
 
   const paperHeader = Math.round((y + 4) * 100) / 100
@@ -199,7 +232,11 @@ function buildPanel(size, options) {
   const footerBandH = compact ? 34 : 38
   const footerRowH = footerBandH / 2
   const footerH = footerBandH + (compact ? 0 : rowH + 3) + 4
-  const paperFooter = Math.round((H - marginBottom - footerH) * 100) / 100
+  // 表格分页算法没有完整计入最后的合计行。分页边界额外上移一行，
+  // 但页脚元素仍固定在原位置，中间的空档专门留给合计行。
+  const tableSummaryReserveH = compact ? 24 : 26
+  const footerContentTop = Math.round((H - marginBottom - footerH) * 100) / 100
+  const paperFooter = Math.round((footerContentTop - tableSummaryReserveH) * 100) / 100
 
   // ---------------- 商品表格 ----------------
   const tableTop = paperHeader + 2
@@ -252,7 +289,7 @@ function buildPanel(size, options) {
   })
 
   // ---------------- 页脚：送货人 / 收货人 / 备注；制单人+页码同排 ----------------
-  let fy = paperFooter + (compact ? 2 : 4)
+  let fy = footerContentTop + (compact ? 2 : 4)
 
   // 右侧信息栏向左扩展，给“制单人：姓名”留出完整单行宽度。
   const rightColW = mm(58)
@@ -276,7 +313,8 @@ function buildPanel(size, options) {
   text({
     left: rightColLeft, top: fy, width: rightColW - 4, height: footerRowH,
     title: '备注', field: 'remark', fontSize: fs.footer,
-    textAlign: 'left', textContentVerticalAlign: 'middle'
+    // 页脚高度固定；超长备注用省略号收口，绝不换行压到制单人。
+    textAlign: 'left', textContentWrap: 'ellipsis', textContentVerticalAlign: 'middle'
   })
   const pageNoW = mm(26)
   text({
