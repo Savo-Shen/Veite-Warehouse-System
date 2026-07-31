@@ -395,7 +395,14 @@
           <template #default="scope"><el-input v-model="scope.row.skuName" size="small" /></template>
         </el-table-column>
         <el-table-column label="数量" width="110">
-          <template #default="scope"><el-input v-model="scope.row.quantity" size="small" /></template>
+          <template #default="scope">
+            <el-input v-model="scope.row.quantity" size="small" @change="recalculatePrintAmount(scope.row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="单价(元)" width="120">
+          <template #default="scope">
+            <el-input v-model="scope.row.unitPrice" size="small" @change="recalculatePrintAmount(scope.row)" />
+          </template>
         </el-table-column>
         <el-table-column label="金额(元)" width="120">
           <template #default="scope"><el-input v-model="scope.row.amount" size="small" /></template>
@@ -407,7 +414,7 @@
         </el-table-column>
       </el-table>
       <div class="mt10">
-        <el-button link type="primary" @click="printRows.push({ itemName: '', skuName: '', quantity: '', amount: '' })">
+        <el-button link type="primary" @click="printRows.push({ itemName: '', skuName: '', quantity: '', unitPrice: '', amount: '' })">
           + 添加一行
         </el-button>
         <span style="color: #909399; font-size: 12px; margin-left: 12px;">
@@ -425,7 +432,7 @@
 
 <script setup name="ShipmentOrder">
 import {listShipmentOrder, delShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
-import {listByShipmentOrderId} from "@/api/wms/shipmentOrderDetail";
+import {listByShipmentOrderId, getLastPrices} from "@/api/wms/shipmentOrderDetail";
 import {getCurrentInstance, reactive, ref, computed, watch, toRefs, onMounted, onBeforeUnmount} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
 import {
@@ -486,6 +493,14 @@ function saveOffset() {
 
 loadOffset()
 watch(paperSizeKey, loadOffset)
+
+function recalculatePrintAmount(row) {
+  const quantity = Number(row.quantity)
+  const unitPrice = Number(row.unitPrice)
+  if (Number.isFinite(quantity) && Number.isFinite(unitPrice)) {
+    row.amount = (quantity * unitPrice).toFixed(2)
+  }
+}
 
 // 打印前校对弹窗
 const printDialogVisible = ref(false)
@@ -615,12 +630,37 @@ async function handlePrint(row, sizeKey) {
       deliveryBy: '',
       receiveBy: ''
     }
-    printRows.value = (shipmentOrder.details || []).map(detail => {
+    const details = shipmentOrder.details || []
+    const skuIds = [...new Set(details.map(detail => detail.skuId).filter(Boolean))]
+    const lastPriceMap = {}
+    if (shipmentOrder.merchantId && skuIds.length) {
+      try {
+        const priceRes = await getLastPrices(shipmentOrder.merchantId, skuIds)
+        priceRes.data?.forEach(item => {
+          lastPriceMap[String(item.skuId)] = item.price
+        })
+      } catch (e) {
+        // 历史报价接口异常不应阻断打印，下面会自动回退到商品售价。
+        console.warn('查询客户历史售价失败，打印单价将使用商品售价', e)
+      }
+    }
+    printRows.value = details.map(detail => {
+      const quantity = Number(detail.quantity || 0)
+      const amount = Number(detail.amount || 0)
+      const lastPrice = lastPriceMap[String(detail.skuId)]
+      const preferredPrice = lastPrice !== undefined && lastPrice !== null
+        ? lastPrice
+        : detail.itemSku?.sellingPrice
+      const unitPrice = preferredPrice === undefined || preferredPrice === null || preferredPrice === ''
+        ? NaN
+        : Number(preferredPrice)
       return {
         itemName: detail.item?.itemName || '',
         skuName: detail.itemSku?.skuName || '',
-        quantity: Number(detail.quantity || 0).toFixed(0),
-        amount: Number(detail.amount || 0).toFixed(2)
+        quantity: quantity.toFixed(0),
+        // 当前客户有历史成交价时优先使用；没有历史记录则回退到商品售价。
+        unitPrice: Number.isFinite(unitPrice) ? unitPrice.toFixed(2) : '',
+        amount: amount.toFixed(2)
       }
     })
     printDialogVisible.value = true
@@ -639,13 +679,15 @@ async function doPrint() {
   const minRows = currentPaperSize.value.minRows || 0
   let no = 0
   const rows = printRows.value.map(row => {
-    const empty = !row.itemName && !row.skuName && !row.quantity && !row.amount
+    const empty = !row.itemName && !row.skuName && !row.quantity && !row.unitPrice && !row.amount
     // 整行留空的就打成空格子，不占序号，方便手写补货
-    return empty ? { index: '', itemName: '', skuName: '', quantity: '', amount: '' } : { ...row, index: ++no }
+    return empty
+      ? { index: '', itemName: '', skuName: '', quantity: '', unitPrice: '', amount: '' }
+      : { ...row, index: ++no }
   })
   // 明细不足时补空白行，单据看起来是画好格子的完整表
   while (rows.length < minRows) {
-    rows.push({ index: '', itemName: '', skuName: '', quantity: '', amount: '' })
+    rows.push({ index: '', itemName: '', skuName: '', quantity: '', unitPrice: '', amount: '' })
   }
   try {
     // 先在主页面把 logo 取成 base64，交给 hiprint 的打印 iframe，

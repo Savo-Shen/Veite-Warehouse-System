@@ -56,10 +56,11 @@ const TABLE_COLUMNS = [
   // summaryNumFormat 是小数位数，hiprint 内部写法是 `tableSummaryNumFormat || 2`，
   // 所以 0 位小数必须写成字符串 '0'，否则会被当成未设置而按 2 位输出
   { title: '序号', field: 'index', percent: 7, align: 'center', summaryText: '合计' },
-  { title: '商品名称', field: 'itemName', percent: 31, align: 'left' },
-  { title: '规格名称', field: 'skuName', percent: 28, align: 'left' },
-  { title: '数量', field: 'quantity', percent: 12, align: 'center', summary: 'sum', summaryNumFormat: '0' },
-  { title: '金额(元)', field: 'amount', percent: 22, align: 'right', summary: 'sum', summaryNumFormat: 2 }
+  { title: '商品名称', field: 'itemName', percent: 27, align: 'left' },
+  { title: '规格名称', field: 'skuName', percent: 24, align: 'left' },
+  { title: '数量', field: 'quantity', percent: 11, align: 'center', summary: 'sum', summaryNumFormat: '0' },
+  { title: '单价(元)', field: 'unitPrice', percent: 14, align: 'right' },
+  { title: '金额(元)', field: 'amount', percent: 17, align: 'right', summary: 'sum', summaryNumFormat: 2 }
 ]
 
 function buildPanel(size, options) {
