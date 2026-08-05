@@ -60,6 +60,9 @@ docker image prune -f
 
 自动备份默认每天 03:00 执行并保留 7 天，可在 `.env.docker` 中修改 `BACKUP_HOUR`、`BACKUP_MINUTE` 和 `BACKUP_RETENTION_DAYS`。
 
+后端应用另有一套内置的自动备份（`WMS_BACKUP_*` 系列变量），主要给不用 Docker 的原生部署使用。
+两套只应启用一套，Docker 下默认关闭内置的那套。详见 [数据库备份](database-backup.md)。
+
 ## 5. 数据库合并导入
 
 管理员可访问 `/wms/dbImport`，上传本系统导出的 `.sql` 或 `.sql.gz` 文件。导入账号必须有创建和删除临时数据库的权限，因为系统会先创建临时库进行预览，确认后才合并到正式库。
