@@ -294,3 +294,26 @@ wms:
     # 不需要代理就保持注释/留空
     # proxy-host: 127.0.0.1
     # proxy-port: 7890
+  # 数据库自动备份。
+  # 注意：这里的值只是「首次运行时的默认值」。系统跑起来之后，备份计划在后台
+  # 「基础资料 → 数据库备份」页面里改，改完存进 sys_config 并立即生效，不需要改这里也不需要重启。
+  database-backup:
+    # 备份存放目录。相对路径基于进程工作目录：Docker 下是 /app（即已挂载的 /app/backups），
+    # Windows 原生启动时是 backend\，建议在 backend\.env 里用 WMS_BACKUP_DIR 指定一个绝对路径。
+    dir: ${WMS_BACKUP_DIR:./backups}
+    # mysqldump 可执行文件路径。留空表示自动查找：先找 PATH，再找 MySQL/MariaDB 的常见安装目录。
+    mysqldump-path: ${WMS_BACKUP_MYSQLDUMP:}
+    # 离机副本目录。指向网盘同步盘（OneDrive、坚果云等）或移动硬盘，每次备份完成后自动复制一份。
+    # 留空表示不做副本。备份和数据库在同一块硬盘上时，硬盘坏了会一起丢失。
+    mirror-dir: ${WMS_BACKUP_MIRROR_DIR:}
+    enabled: ${WMS_BACKUP_ENABLED:true}
+    # 距上次备份超过这个小时数就自动备份一次
+    interval-hours: ${WMS_BACKUP_INTERVAL_HOURS:24}
+    # 保留天数，0 表示不清理
+    retention-days: ${WMS_BACKUP_RETENTION_DAYS:14}
+    # 无论多旧都至少保留的份数，防止长期未开机时备份被清空
+    min-keep: ${WMS_BACKUP_MIN_KEEP:3}
+    # 启动后多久开始第一次检查，以及之后的检查周期（毫秒）。
+    # 检查很轻（只看一眼备份目录），周期短一点可以让「到点补备份」更准时。
+    initial-delay-ms: 120000
+    check-interval-ms: 300000

@@ -5,7 +5,10 @@ import com.ruoyi.common.core.domain.R;
 import com.ruoyi.common.log.annotation.Log;
 import com.ruoyi.common.log.enums.BusinessType;
 import com.ruoyi.common.web.core.BaseController;
+import com.ruoyi.wms.domain.vo.DbBackupSettingsVo;
+import com.ruoyi.wms.service.DbBackupScheduler;
 import com.ruoyi.wms.service.DbBackupService;
+import com.ruoyi.wms.service.DbBackupSettingsService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,11 +37,41 @@ import java.util.Map;
 public class DbBackupController extends BaseController {
 
     private final DbBackupService dbBackupService;
+    private final DbBackupScheduler dbBackupScheduler;
+    private final DbBackupSettingsService dbBackupSettingsService;
 
     @SaCheckPermission("wms:tool:dbBackup")
     @GetMapping("/list")
     public R<List<Map<String, Object>>> list() {
         return R.ok(dbBackupService.list());
+    }
+
+    @SaCheckPermission("wms:tool:dbBackup")
+    @GetMapping("/status")
+    public R<Map<String, Object>> status() {
+        return R.ok(dbBackupScheduler.status());
+    }
+
+    /** 当前备份计划设置 */
+    @SaCheckPermission("wms:tool:dbBackup")
+    @GetMapping("/settings")
+    public R<DbBackupSettingsVo> settings() {
+        return R.ok(dbBackupSettingsService.current());
+    }
+
+    /** 保存备份计划设置，保存即生效 */
+    @SaCheckPermission("wms:tool:dbBackup")
+    @Log(title = "数据库备份设置", businessType = BusinessType.UPDATE)
+    @PostMapping("/settings")
+    public R<DbBackupSettingsVo> saveSettings(@RequestBody DbBackupSettingsVo settings) {
+        return R.ok(dbBackupSettingsService.save(settings));
+    }
+
+    /** 环境自检：mysqldump、目录、数据库连接 */
+    @SaCheckPermission("wms:tool:dbBackup")
+    @GetMapping("/check")
+    public R<List<Map<String, Object>>> check() {
+        return R.ok(dbBackupService.checkEnvironment());
     }
 
     @SaCheckPermission("wms:tool:dbBackup")
