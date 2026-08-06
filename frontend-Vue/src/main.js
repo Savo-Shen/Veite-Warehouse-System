@@ -88,4 +88,13 @@ app.use(ElementPlus, {
 // 修改 el-dialog 默认点击遮照为不关闭
 app._context.components.ElDialog.props.closeOnClickModal.default = false
 
+// 禁止鼠标滚轮修改数字输入框的值：用户滚动页面时可能刚好停在价格/数量输入框上，
+// 浏览器原生行为会静默改掉数值。这里在滚轮事件里让输入框失焦，默认行为随之失效，页面滚动不受影响。
+document.addEventListener('wheel', (event) => {
+  const target = event.target
+  if (target instanceof HTMLInputElement && target.type === 'number' && target === document.activeElement) {
+    target.blur()
+  }
+}, { capture: true, passive: true })
+
 app.mount('#app')
