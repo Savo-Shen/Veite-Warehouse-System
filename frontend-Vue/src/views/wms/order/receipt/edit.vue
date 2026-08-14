@@ -158,16 +158,29 @@
                 ></el-input-number>
               </template>
             </el-table-column>
-            <el-table-column label="单价" prop="itemSku.costPrice" width="220">
+            <el-table-column label="单价" prop="price" width="240">
               <template #default="{ row }">
-                <!-- <div>{{ row.itemSku.costPrice }}</div> -->
                  <el-input-number
-                  v-model="row.itemSku.costPrice"
+                  v-model="row.price"
                   placeholder="单价"
                   :min="0"
                   :precision="2"
                   @change="handleChangeQuantity"
                 ></el-input-number>
+                <div class="price-quick">
+                  <el-link
+                    v-if="hasValue(row.itemSku.costPrice)"
+                    type="warning"
+                    :underline="false"
+                    @click="applySkuPrice(row, 'costPrice')"
+                  >进价￥{{ Number(row.itemSku.costPrice).toFixed(2) }}</el-link>
+                  <el-link
+                    v-if="hasValue(row.itemSku.sellingPrice)"
+                    type="success"
+                    :underline="false"
+                    @click="applySkuPrice(row, 'sellingPrice')"
+                  >售价￥{{ Number(row.itemSku.sellingPrice).toFixed(2) }}</el-link>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="金额" prop="amount" width="220" align="center">
@@ -213,8 +226,22 @@
                 </label>
                 <label>
                   <span>单价</span>
-                  <el-input-number v-model="row.itemSku.costPrice" :min="0" :precision="2" @change="handleChangeQuantity" />
+                  <el-input-number v-model="row.price" :min="0" :precision="2" @change="handleChangeQuantity" />
                 </label>
+              </div>
+              <div class="price-quick">
+                <el-link
+                  v-if="hasValue(row.itemSku.costPrice)"
+                  type="warning"
+                  :underline="false"
+                  @click="applySkuPrice(row, 'costPrice')"
+                >进价￥{{ Number(row.itemSku.costPrice).toFixed(2) }}</el-link>
+                <el-link
+                  v-if="hasValue(row.itemSku.sellingPrice)"
+                  type="success"
+                  :underline="false"
+                  @click="applySkuPrice(row, 'sellingPrice')"
+                >售价￥{{ Number(row.itemSku.sellingPrice).toFixed(2) }}</el-link>
               </div>
               <div class="mobile-edit-total">金额：￥{{ Number(row.amount || 0).toFixed(2) }}</div>
             </div>
@@ -332,6 +359,7 @@ const handleOkClick = (item) => {
         {
           itemSku: it.itemSku,
           item: it.item,
+          price: hasValue(it.itemSku?.costPrice) ? Number(it.itemSku.costPrice) : undefined,
           amount: undefined,
           quantity: it.quantity,
           warehouseId: form.value.warehouseId
@@ -339,8 +367,35 @@ const handleOkClick = (item) => {
       )
     }
   })
+  handleChangeQuantity()
 }
 // 选择商品 end
+
+// 单价工具 start
+const hasValue = (val) => val !== undefined && val !== null && val !== '' && !Number.isNaN(Number(val))
+
+/** 明细的单价没有落库，回显时由金额/数量反推，缺失时再退回规格进价 */
+const restorePriceFromAmount = (details) => {
+  ;(details || []).forEach(it => {
+    if (hasValue(it.amount) && Number(it.quantity) > 0) {
+      it.price = Number(it.amount) / Number(it.quantity)
+    } else if (hasValue(it.itemSku?.costPrice)) {
+      it.price = Number(it.itemSku.costPrice)
+    } else {
+      it.price = undefined
+    }
+  })
+}
+
+/** 一键把明细单价改成该规格的进价或售价 */
+const applySkuPrice = (row, field) => {
+  if (!hasValue(row.itemSku?.[field])) {
+    return
+  }
+  row.price = Number(row.itemSku[field])
+  handleChangeQuantity()
+}
+// 单价工具 end
 
 // 初始化receipt-order-form ref
 const receiptForm = ref()
@@ -489,6 +544,7 @@ const prefillFromAiDraft = () => {
     amount: d.amount,
     warehouseId: form.value.warehouseId,
   }))
+  restorePriceFromAmount(form.value.details)
   selectedSku.value = form.value.details
     .filter(d => d.itemSku && d.itemSku.id)
     .map(d => ({ id: d.itemSku.id }))
@@ -510,6 +566,8 @@ const loadDetail = (id) => {
   loading.value = true
   getReceiptOrder(id).then((response) => {
     form.value = {...response.data}
+    // 单价没有单独入库，用已保存的金额/数量还原，否则会退回规格默认进价
+    restorePriceFromAmount(form.value.details)
     if (response.data.details?.length) {
       selectedSku.value = response.data.details.map(it => {
         return {
@@ -529,7 +587,7 @@ const handleChangeQuantity = () => {
   form.value.details.forEach(it => {
     if (it.quantity) {
       sum += Number(it.quantity)
-      it.amount = it.quantity * it.itemSku.costPrice
+      it.amount = hasValue(it.price) ? Number((Number(it.quantity) * Number(it.price)).toFixed(2)) : undefined
     }
   })
   form.value.totalQuantity = sum
@@ -587,6 +645,18 @@ const goSaasTip = () => {
 .image-help {
   margin-top: 6px;
   color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.price-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.price-quick .el-link {
   font-size: 12px;
 }
 

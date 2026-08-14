@@ -20,9 +20,9 @@ public interface ItemSkuMapper extends BaseMapperPlus<ItemSku, ItemSkuVo> {
         @Param("itemKeywordGroups") List<List<String>> itemKeywordGroups
     );
 
-    List<ItemSkuMapVo> queryItemSkuMapVos(Collection<Long> ids);
+    List<ItemSkuMapVo> queryItemSkuMapVos(@Param("ids") Collection<Long> ids);
 
-    ItemSkuMapVo queryItemSkuMapVo(Long id);
+    ItemSkuMapVo queryItemSkuMapVo(@Param("id") Long id);
 
     LocationVo queryItemLocationVo(Long id);
 

@@ -203,9 +203,8 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
                 wrapper.eq(Inventory::getId,detail.getInventoryId());
                 Inventory inventory = inventoryMapper.selectOne(wrapper);
                 if(inventory.getQuantity().compareTo(detail.getQuantity())!=0){
-                    ItemSkuMapVo itemSkuMapVo = itemSkuService.queryItemSkuMapVo(detail.getSkuId());
                     throw new ServiceException(
-                        "账面库存不匹配："+itemSkuMapVo.getItem().getItemName()+"（"+itemSkuMapVo.getItemSku().getSkuName()+"）",
+                        "账面库存不匹配："+skuLabel(detail.getSkuId()),
                         HttpStatus.CONFLICT,
                         "填写账面库存："+detail.getQuantity()+" 实际账面库存："+inventory.getQuantity());
                 }else {
@@ -219,9 +218,8 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
                 wrapper.eq(Inventory::getWarehouseId,detail.getWarehouseId());
                 Inventory inventory = inventoryMapper.selectOne(wrapper);
                 if(inventory != null){
-                    ItemSkuMapVo itemSkuMapVo = itemSkuService.queryItemSkuMapVo(detail.getSkuId());
                     throw new ServiceException(
-                        "账面库存不匹配："+itemSkuMapVo.getItem().getItemName()+"（"+itemSkuMapVo.getItemSku().getSkuName()+"）",
+                        "账面库存不匹配："+skuLabel(detail.getSkuId()),
                         HttpStatus.CONFLICT,
                         "填写账面库存：0, 实际账面库存："+inventory.getQuantity());
                 }else {
@@ -285,14 +283,12 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
             wrapper.eq(Inventory::getSkuId, shipmentOrderDetailBo.getSkuId());
             Inventory result = inventoryMapper.selectOne(wrapper);
             if(result==null){
-                ItemSkuMapVo itemSkuMapVo = itemSkuService.queryItemSkuMapVo(shipmentOrderDetailBo.getSkuId());
-                throw new ServiceException("库存不足", HttpStatus.CONFLICT,itemSkuMapVo.getItem().getItemName()+"（"+itemSkuMapVo.getItemSku().getSkuName()+"）库存不足，当前库存：0");
+                throw new ServiceException("库存不足", HttpStatus.CONFLICT, skuLabel(shipmentOrderDetailBo.getSkuId())+"库存不足，当前库存：0");
             }
             BigDecimal beforeQuantity = result.getQuantity();
             BigDecimal afterQuantity = beforeQuantity.subtract(shipmentOrderDetailBo.getQuantity());
             if(afterQuantity.signum() == -1){
-                ItemSkuMapVo itemSkuMapVo = itemSkuService.queryItemSkuMapVo(shipmentOrderDetailBo.getSkuId());
-                throw new ServiceException("库存不足", HttpStatus.CONFLICT,itemSkuMapVo.getItem().getItemName()+"（"+itemSkuMapVo.getItemSku().getSkuName()+"）库存不足，当前库存："+ beforeQuantity);
+                throw new ServiceException("库存不足", HttpStatus.CONFLICT, skuLabel(shipmentOrderDetailBo.getSkuId())+"库存不足，当前库存："+ beforeQuantity);
             }
             shipmentOrderDetailBo.setBeforeQuantity(beforeQuantity);
             shipmentOrderDetailBo.setAfterQuantity(afterQuantity);
@@ -300,6 +296,17 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
             updateList.add(result);
         });
         updateBatchById(updateList);
+    }
+
+    /**
+     * 拼接“商品名称（规格名称）”，规格已被删除时退化为 skuId，避免提示信息本身再抛异常
+     */
+    private String skuLabel(Long skuId) {
+        ItemSkuMapVo itemSkuMapVo = itemSkuService.queryItemSkuMapVo(skuId);
+        if (itemSkuMapVo == null || itemSkuMapVo.getItem() == null || itemSkuMapVo.getItemSku() == null) {
+            return "规格[" + skuId + "]";
+        }
+        return itemSkuMapVo.getItem().getItemName() + "（" + itemSkuMapVo.getItemSku().getSkuName() + "）";
     }
 
     public boolean existsByWarehouseId(Long warehouseId) {

@@ -59,10 +59,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from wms_item_sku sku
         inner join wms_item item on sku.item_id=item.id
         left join wms_location loc on sku.item_location_id = loc.id
-        where sku.id in
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
-        </foreach>
+        where sku.id = #{id}
     </select>
 
     <select id="selectByBo" resultMap="itemSkuMapVo">
