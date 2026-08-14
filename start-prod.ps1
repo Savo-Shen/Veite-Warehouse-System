@@ -68,6 +68,57 @@ function Resolve-CommandPath {
     throw "找不到命令: $($Names -join ' / ')。请先安装或配置 PATH: $InstallHint"
 }
 
+function Get-NewestSourceWriteTime {
+    param([string]$Path)
+
+    # 只看会被打进 Jar 的源码类文件，避免改 .env、日志等触发无谓的重新打包
+    $sourceExtensions = @(".java", ".xml", ".yml", ".yaml", ".properties", ".sql", ".ftl")
+    $skipDirectories = @("target", ".git", ".idea", "node_modules", "logs")
+
+    $newest = [DateTime]::MinValue
+    $pending = New-Object System.Collections.Stack
+    $pending.Push($Path)
+
+    while ($pending.Count -gt 0) {
+        $current = $pending.Pop()
+        foreach ($entry in Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue) {
+            if ($entry.PSIsContainer) {
+                if ($skipDirectories -notcontains $entry.Name) {
+                    $pending.Push($entry.FullName)
+                }
+            } elseif ($sourceExtensions -contains $entry.Extension.ToLower() -and $entry.LastWriteTime -gt $newest) {
+                $newest = $entry.LastWriteTime
+            }
+        }
+    }
+
+    return $newest
+}
+
+function Invoke-BackendPackage {
+    param(
+        [string]$BackendDir,
+        [bool]$JarExists
+    )
+
+    try {
+        $MvnCmd = Resolve-CommandPath -Names @("mvn.cmd", "mvn") -InstallHint "Maven"
+    } catch {
+        if ($JarExists) {
+            Write-Host "警告: 找不到 Maven，无法重新打包，将继续使用旧 Jar 启动，最新的后端改动不会生效。" -ForegroundColor Yellow
+            return
+        }
+        throw
+    }
+
+    Write-Host "执行: mvn -DskipTests clean package（首次或改动较多时可能需要几分钟）"
+    $mvn = Start-Process -FilePath $MvnCmd -ArgumentList @("-DskipTests", "clean", "package") -WorkingDirectory $BackendDir -NoNewWindow -PassThru -Wait
+    if ($mvn.ExitCode -ne 0) {
+        throw "后端打包失败（mvn 退出码: $($mvn.ExitCode)）。请在 backend 目录手动执行 mvn -DskipTests clean package 查看详细错误。"
+    }
+    Write-Host "打包完成。" -ForegroundColor Green
+}
+
 function Test-PortInUse {
     param([int]$Port)
 
@@ -112,14 +163,14 @@ function Stop-TrackedProcess {
 
 function Stop-PortsStartedByThisScript {
     if ($FrontendStarted) {
-        foreach ($pid in Get-ListeningPortPids 80) {
-            Stop-ProcessTreeById -ProcessId $pid
+        foreach ($listenerPid in Get-ListeningPortPids 80) {
+            Stop-ProcessTreeById -ProcessId $listenerPid
         }
     }
 
     if ($BackendStarted) {
-        foreach ($pid in Get-ListeningPortPids 8080) {
-            Stop-ProcessTreeById -ProcessId $pid
+        foreach ($listenerPid in Get-ListeningPortPids 8080) {
+            Stop-ProcessTreeById -ProcessId $listenerPid
         }
     }
 }
@@ -158,6 +209,30 @@ try {
 
     $JavaCmd = Resolve-CommandPath -Names @("java.exe", "java") -InstallHint "JDK 17"
     $PnpmCmd = Resolve-CommandPath -Names @("pnpm.cmd", "pnpm") -InstallHint "pnpm"
+
+    Write-Step "检查后端 Jar 是否为最新"
+    $JarExists = Test-Path $BackendJar
+    $NeedPackage = $false
+    if (-not $JarExists) {
+        Write-Host "未找到 Jar，需要先打包: $BackendJar"
+        $NeedPackage = $true
+    } else {
+        $JarTime = (Get-Item $BackendJar).LastWriteTime
+        $SourceTime = Get-NewestSourceWriteTime -Path $BackendDir
+        $JarStamp = $JarTime.ToString("yyyy-MM-dd HH:mm:ss")
+        $SourceStamp = $SourceTime.ToString("yyyy-MM-dd HH:mm:ss")
+        if ($SourceTime -gt $JarTime) {
+            Write-Host "源码($SourceStamp) 比 Jar($JarStamp) 新，需要重新打包。" -ForegroundColor Yellow
+            $NeedPackage = $true
+        } else {
+            Write-Host "Jar 已是最新（$JarStamp），跳过打包。"
+        }
+    }
+
+    if ($NeedPackage) {
+        Write-Step "重新打包后端"
+        Invoke-BackendPackage -BackendDir $BackendDir -JarExists $JarExists
+    }
 
     Write-Step "启动后端服务"
     if (Test-Path $BackendJar) {
