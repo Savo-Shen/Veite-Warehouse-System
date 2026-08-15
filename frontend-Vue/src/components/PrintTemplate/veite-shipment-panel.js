@@ -51,7 +51,7 @@ export function getShipmentPaperSize(key) {
     || SHIPMENT_PAPER_SIZES.find((it) => it.key === DEFAULT_SHIPMENT_PAPER_SIZE)
 }
 
-/** 商品表格列：宽度按整体宽度的百分比分配，保证列宽之和正好等于表格宽度 */
+/** 商品表格列：percent 是无明细数据时的默认比例，有数据时按内容动态分配（见 computeTableLayout） */
 const TABLE_COLUMNS = [
   // summaryNumFormat 是小数位数，hiprint 内部写法是 `tableSummaryNumFormat || 2`，
   // 所以 0 位小数必须写成字符串 '0'，否则会被当成未设置而按 2 位输出
@@ -62,6 +62,115 @@ const TABLE_COLUMNS = [
   { title: '单价(元)', field: 'unitPrice', percent: 14, align: 'right' },
   { title: '金额(元)', field: 'amount', percent: 17, align: 'right', summary: 'sum', summaryNumFormat: 2 }
 ]
+
+// print-lock.css 给单元格左右各 4pt 内边距，另留一点边框和字体回退的误差
+const CELL_HPAD = 8
+const CELL_SAFETY = 2
+
+let measureNode
+
+/**
+ * 量一段文本按打印字体排出来的宽度（pt）。
+ * 用隐藏 DOM 元素实测而不是 canvas measureText：canvas 在缺字体（比如 mac 上没有宋体）
+ * 时的回退字体可能和页面渲染的回退不一致，量出来的宽度会差几个像素，
+ * 差一点就会导致“算好了不换行、打出来还是换行”。DOM 实测和真实渲染完全同源。
+ * 非浏览器环境按全角 1em / 半角 0.55em 估算兜底。
+ */
+function measureTextPt(value, fontSize, fontWeight) {
+  const str = value === null || value === undefined ? '' : String(value)
+  if (!str) return 0
+  if (measureNode === undefined) {
+    if (typeof document !== 'undefined' && document.body) {
+      measureNode = document.createElement('span')
+      measureNode.style.cssText =
+        'position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre;font-family:SimSun'
+      document.body.appendChild(measureNode)
+    } else {
+      measureNode = null
+    }
+  }
+  if (measureNode) {
+    measureNode.style.fontSize = `${fontSize}pt`
+    measureNode.style.fontWeight = String(fontWeight)
+    measureNode.textContent = str
+    // getBoundingClientRect 量出来是 px，转回 pt（1px = 0.75pt）
+    return measureNode.getBoundingClientRect().width * 0.75
+  }
+  let w = 0
+  for (const ch of str) {
+    w += ch.codePointAt(0) > 0xFF ? fontSize : fontSize * 0.55
+  }
+  return w
+}
+
+/** 每列需要的最小宽度：取「表头 / 所有单元格 / 合计行」里最宽的一个，加上单元格内边距 */
+function neededColumnWidths(rows, fontSize, fontWeight) {
+  return TABLE_COLUMNS.map((col) => {
+    let text = measureTextPt(col.title, fontSize, fontWeight)
+    rows.forEach((row) => {
+      text = Math.max(text, measureTextPt(row[col.field], fontSize, fontWeight))
+    })
+    if (col.summary === 'sum') {
+      const decimals = Number(col.summaryNumFormat) || 0
+      const sum = rows.reduce((acc, row) => acc + (Number(row[col.field]) || 0), 0)
+      text = Math.max(text, measureTextPt(sum.toFixed(decimals), fontSize, fontWeight))
+    }
+    if (col.summaryText) {
+      text = Math.max(text, measureTextPt(col.summaryText, fontSize, fontWeight))
+    }
+    return text + CELL_HPAD + CELL_SAFETY
+  })
+}
+
+/**
+ * 把表宽分给各列：
+ *  - 放得下时，不够的列给到需要宽度，从有富余的列按富余比例挤出空间，其余仍保持默认比例；
+ *  - 所有列都压到需要宽度仍放不下时，超宽列按超出比例分摊压缩（此时单元格会换行）。
+ */
+function distributeColumnWidths(contentW, needed) {
+  const base = TABLE_COLUMNS.map(col => contentW * col.percent / 100)
+
+  const deficits = needed.map((n, i) => Math.max(0, n - base[i]))
+  const totalDeficit = deficits.reduce((a, b) => a + b, 0)
+  if (!totalDeficit) return base
+
+  const slacks = base.map((b, i) => Math.max(0, b - needed[i]))
+  const totalSlack = slacks.reduce((a, b) => a + b, 0)
+
+  if (totalSlack >= totalDeficit) {
+    // 富余够用：不够的列直接给到需要宽度，富余列按各自富余的比例让出空间
+    return base.map((b, i) => (deficits[i]
+      ? needed[i]
+      : b - slacks[i] * totalDeficit / totalSlack))
+  }
+  // 让出全部富余仍不够：超宽列按各自超出的比例分摊剩下的缺口
+  const remaining = totalDeficit - totalSlack
+  return base.map((b, i) => (deficits[i]
+    ? needed[i] - remaining * deficits[i] / totalDeficit
+    : needed[i]))
+}
+
+// 内容再多也不把字缩到看不清，到这个字号还放不下就退回换行
+const MIN_TABLE_FONT_SIZE = 9
+
+/**
+ * 按明细内容选一个尽量不换行的表格布局（列宽 + 字号）：
+ *  - 先按默认字号量每列需要的宽度，动态分配列宽；
+ *  - 默认字号下放不下时，逐级缩小表格字号（每次 0.5pt，最低 9pt）再量，
+ *    直到放得下为止；到最低字号仍放不下才退回换行（物理极限）。
+ */
+function computeTableLayout(contentW, rows, fontSize, fontWeight) {
+  if (!rows || !rows.length) {
+    return { fontSize, widths: TABLE_COLUMNS.map(col => contentW * col.percent / 100) }
+  }
+  let size = fontSize
+  let needed = neededColumnWidths(rows, size, fontWeight)
+  while (needed.reduce((a, b) => a + b, 0) > contentW && size - 0.5 >= MIN_TABLE_FONT_SIZE) {
+    size -= 0.5
+    needed = neededColumnWidths(rows, size, fontWeight)
+  }
+  return { fontSize: size, widths: distributeColumnWidths(contentW, needed) }
+}
 
 function buildPanel(size, options) {
   const compact = size.compact
@@ -243,12 +352,13 @@ function buildPanel(size, options) {
   const tableTop = paperHeader + 2
   // 设计高度只是个基准，实际渲染时表格按行数伸缩，后面的元素跟着位移
   const tableHeight = bodyRowH * (compact ? 5 : 8) + rowH + 4
+  const tableLayout = computeTableLayout(contentW, options && options.rows, fs.table, printWeight)
   let used = 0
   const columns = TABLE_COLUMNS.map((col, idx) => {
     // 最后一列吃掉四舍五入的零头，保证列宽之和 === 表格宽度
     const width = idx === TABLE_COLUMNS.length - 1
       ? Math.round((contentW - used) * 100) / 100
-      : Math.round(contentW * col.percent) / 100
+      : Math.round(tableLayout.widths[idx] * 100) / 100
     used = Math.round((used + width) * 100) / 100
     return {
       title: col.title,
@@ -274,9 +384,10 @@ function buildPanel(size, options) {
       width: contentW,
       height: tableHeight,
       field: 'table',
-      fontSize: fs.table,
+      // 内容放不下时 computeTableLayout 会缩小字号来保住不换行，表头跟着正文一起缩
+      fontSize: tableLayout.fontSize,
       fontWeight: printWeight,
-      tableHeaderFontSize: fs.table,
+      tableHeaderFontSize: tableLayout.fontSize,
       tableHeaderFontWeight: printWeight,
       fontFamily: 'SimSun',
       tableHeaderRowHeight: rowH + 4,
@@ -358,7 +469,8 @@ function buildPanel(size, options) {
 /**
  * 按纸张 key 生成打印模板
  * @param sizeKey 纸张 key
- * @param options { logo } logo 的 base64，缺省则不打印 logo
+ * @param options { logo, rows } logo 的 base64（缺省则不打印 logo）；
+ *   rows 是将要打印的明细行，用来按内容动态分配列宽，缺省则按默认比例
  */
 export function buildVeiteShipmentPanel(sizeKey, options) {
   return { panels: [buildPanel(getShipmentPaperSize(sizeKey), options)] }
