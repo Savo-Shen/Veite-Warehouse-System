@@ -694,7 +694,8 @@ async function doPrint() {
     // 免得图片没加载完就触发打印，纸上留一个空白方框
     const logo = await loadPrintLogo()
     const printTemplate = new proxy.$hiprint.PrintTemplate({
-      template: buildVeiteShipmentPanel(paperSizeKey.value, { logo })
+      // rows 一起传给模板，按实际内容动态分配列宽，避免商品名称/规格在格子里换行
+      template: buildVeiteShipmentPanel(paperSizeKey.value, { logo, rows })
     })
     // hiprint 的偏移单位是 pt，整页内容一起平移
     const printOptions = {
