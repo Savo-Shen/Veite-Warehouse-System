@@ -71,6 +71,11 @@ public class InventoryBo extends BaseEntity {
     private Long itemCategory;
 
     /**
+     * 商品品牌ID（按品牌筛选）
+     */
+    private Long itemBrand;
+
+    /**
      * 商品标签ID（按标签筛选）
      */
     private Long tagId;

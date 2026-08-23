@@ -22,11 +22,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select sku.id
         from wms_item_sku sku
         inner join wms_item item on sku.item_id = item.id
+        left join wms_item_brand brand on item.item_brand = brand.id
         where sku.sku_name like concat('%', #{word}, '%')
         or sku.sku_code like concat('%', #{word}, '%')
         or sku.barcode like concat('%', #{word}, '%')
         or item.item_name like concat('%', #{word}, '%')
         or item.item_code like concat('%', #{word}, '%')
+        <!-- 品牌已从商品名称里拆出来单独存，按品牌名搜索要走品牌表 -->
+        or brand.brand_name like concat('%', #{word}, '%')
     </select>
 
     <select id="queryItemSkuMapVos" resultMap="itemSkuMapVo">
@@ -74,6 +77,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from wms_item_sku sku
         inner join wms_item item on sku.item_id=item.id
         inner join wms_item_category category on item.item_category=category.id
+        left join wms_item_brand brand on item.item_brand = brand.id
         left join wms_location loc on sku.item_location_id = loc.id
         <where>
             <if test="bo.itemName != null and bo.itemName != ''">
@@ -109,6 +113,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     <foreach collection="group" item="word" separator=" or ">
                         item.item_name like concat('%', #{word}, '%')
                         or item.item_code like concat('%', #{word}, '%')
+                        <!-- 品牌已从商品名称里拆出来单独存，按品牌名搜索要走品牌表 -->
+                        or brand.brand_name like concat('%', #{word}, '%')
                         or sku.sku_name like concat('%', #{word}, '%')
                         or sku.sku_code like concat('%', #{word}, '%')
                         or sku.barcode like concat('%', #{word}, '%')

@@ -31,6 +31,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         from wms_inventory inventory
         inner join wms_item_sku sku on inventory.sku_id=sku.id
         inner join wms_item item on sku.item_id=item.id
+        left join wms_item_brand brand on item.item_brand = brand.id
         left join wms_location loc on sku.item_location_id = loc.id
         <where>
             <if test="(bo.itemName != null and bo.itemName != '')
@@ -38,6 +39,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 or (bo.skuName != null and bo.skuName != '')
                 or (bo.skuCode != null and bo.skuCode != '')
                 or (bo.itemCategory != null)
+                or (bo.itemBrand != null)
                 or (bo.itemId != null)
                 or (bo.warehouseId != null)
                 or (bo.minQuantity != null)
@@ -58,6 +60,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 </if>
                 <if test="bo.itemCategory != null">
                     and item.item_category=#{bo.itemCategory}
+                </if>
+                <if test="bo.itemBrand != null">
+                    and item.item_brand=#{bo.itemBrand}
                 </if>
                 <if test="bo.itemId != null">
                     and item.id=#{bo.itemId}
@@ -87,6 +92,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 <foreach collection="group" item="word" separator=" or ">
                     item.item_name like concat('%', #{word}, '%')
                     or item.item_code like concat('%', #{word}, '%')
+                    <!-- 品牌已从商品名称里拆出来单独存，按品牌名搜索要走品牌表 -->
+                    or brand.brand_name like concat('%', #{word}, '%')
                     or sku.sku_name like concat('%', #{word}, '%')
                     or sku.sku_code like concat('%', #{word}, '%')
                     or sku.barcode like concat('%', #{word}, '%')
