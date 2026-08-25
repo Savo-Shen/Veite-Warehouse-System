@@ -35,7 +35,7 @@
                   inactive-text="正常出库"
                   @change="handleToggleRecordOnly"
                 />
-                <span class="record-only-hint" v-if="form.id">单据已保存，用途不能再改</span>
+                <span class="record-only-hint" v-if="form.id">单据已保存，用途不能再改（其它内容可以改，改动会记进历史）</span>
                 <div v-if="form.recordOnly" class="record-only-banner">
                   纯记录单：只留商品名称和成本价 / 销售价备查，<strong>不扣库存、不写库存流水</strong>。
                   商品名手工输入，不用先在商品库里建档。
@@ -91,7 +91,7 @@
             <el-col :span="6">
               <el-form-item label="客户" prop="merchantId">
                 <el-select v-model="form.merchantId" placeholder="请选择客户" clearable filterable @change="loadLastPrices">
-                  <el-option v-for="item in useWmsStore().merchantList.filter(m => m.merchantType != 2)" :key="item.id" :label="item.merchantName"
+                  <el-option v-for="item in useWmsStore().merchantList.filter(m => m.merchantType == 1)" :key="item.id" :label="item.merchantName"
                              :value="item.id"/>
                 </el-select>
               </el-form-item>
@@ -460,7 +460,7 @@
       <div class="btn-box">
         <div class="primary-actions">
           <el-button @click="doShipment" :type="form.recordOnly ? 'warning' : 'primary'" class="ml10">
-            {{ form.recordOnly ? '保存记录' : '完成出库' }}
+            {{ form.recordOnly ? (form.id ? '保存修改' : '保存记录') : '完成出库' }}
           </el-button>
           <el-button @click="updateToInvalid" type="danger" v-if="form.id">作废</el-button>
         </div>
@@ -838,7 +838,9 @@ getConfigKey('wms.inventory.allowNegative').then(res => {
 }).catch(() => {})
 
 const doShipment = async () => {
-  await proxy?.$modal.confirm(form.value.recordOnly ? '确认保存这张纯记录单吗？它不会影响库存。' : '确认出库吗？');
+  await proxy?.$modal.confirm(form.value.recordOnly
+    ? (form.value.id ? '确认保存修改吗？改动会记进变更历史，不影响库存。' : '确认保存这张纯记录单吗？它不会影响库存。')
+    : '确认出库吗？');
   shipmentForm.value?.validate((valid) => {
     // 校验
     if (!valid) {
@@ -877,7 +879,7 @@ const submitShipment = (params, allowNegative) => {
   shipment({...params, allowNegative}, {skipConflictAlert: true}).then((res) => {
     if (res.code === 200) {
       ElMessage.success(form.value.recordOnly
-        ? '已保存，这单只做记录，未影响库存'
+        ? (form.value.id ? '修改已保存，可在列表展开查看变更历史' : '已保存，这单只做记录，未影响库存')
         : (allowNegative ? '出库成功，已产生负库存，请尽快盘点补正' : '出库成功'))
       close()
     } else {

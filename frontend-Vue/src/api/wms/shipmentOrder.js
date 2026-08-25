@@ -53,3 +53,11 @@ export function delShipmentOrder(id) {
     method: 'delete'
   })
 }
+
+// 查询出库单的变更历史（谁在什么时候改了什么）
+export function getShipmentOrderLogs(id) {
+  return request({
+    url: '/wms/shipmentOrder/' + id + '/logs',
+    method: 'get'
+  })
+}

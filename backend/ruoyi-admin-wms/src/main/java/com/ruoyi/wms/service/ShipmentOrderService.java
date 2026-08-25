@@ -48,6 +48,7 @@ public class ShipmentOrderService {
     private final InventoryHistoryService inventoryHistoryService;
     private final OrderKeywordSearcher orderKeywordSearcher;
     private final ConfigService configService;
+    private final ShipmentOrderLogService shipmentOrderLogService;
 
     /**
      * 是否允许出库扣成负库存的系统开关（基础资料 → 环境配置）
@@ -141,6 +142,8 @@ public class ShipmentOrderService {
         List<ShipmentOrderDetail> addDetailList = MapstructUtils.convert(detailBoList, ShipmentOrderDetail.class);
         addDetailList.forEach(it -> it.setOrderId(add.getId()));
         shipmentOrderDetailService.saveDetails(addDetailList);
+        shipmentOrderLogService.record(add.getId(), add.getOrderNo(), ShipmentOrderLogService.ACTION_CREATE,
+            buildCreateSummary(bo));
     }
 
     public void validateShipmentOrderNo(String shipmentOrderNo) {
@@ -159,6 +162,9 @@ public class ShipmentOrderService {
         validateRecordOnlyUnchanged(bo);
         fillOrderTotals(bo);
         fillBizDate(bo);
+        // 差异要在落库前算，否则查出来的已经是新值了
+        ShipmentOrderVo before = queryById(bo.getId());
+        String summary = shipmentOrderLogService.diff(before, bo);
         // 更新出库单
         ShipmentOrder update = MapstructUtils.convert(bo, ShipmentOrder.class);
         shipmentOrderMapper.updateById(update);
@@ -166,6 +172,23 @@ public class ShipmentOrderService {
         List<ShipmentOrderDetail> detailList = MapstructUtils.convert(bo.getDetails(), ShipmentOrderDetail.class);
         detailList.forEach(it -> it.setOrderId(bo.getId()));
         shipmentOrderDetailService.saveDetails(detailList);
+        if (isRecordOnly(bo)) {
+            // 纯记录单以本次提交为准，提交里没有的行直接删掉（正常出库单维持原样，
+            // 由前端的删除明细接口负责，这里不动它的语义）
+            List<Long> keepIds = detailList.stream()
+                .map(ShipmentOrderDetail::getId)
+                .filter(Objects::nonNull)
+                .toList();
+            shipmentOrderDetailService.removeDetailsNotIn(bo.getId(), keepIds);
+        }
+        // 作废走的也是这个方法，单独标出来；什么都没改就不记，免得点开保存一次就多一条空历史
+        if (ServiceConstants.ShipmentOrderStatus.INVALID.equals(bo.getOrderStatus())
+            && !ServiceConstants.ShipmentOrderStatus.INVALID.equals(before.getOrderStatus())) {
+            shipmentOrderLogService.record(bo.getId(), bo.getOrderNo(), ShipmentOrderLogService.ACTION_VOID,
+                summary == null ? "作废" : "作废（同时改动：" + summary + "）");
+        } else if (summary != null) {
+            shipmentOrderLogService.record(bo.getId(), bo.getOrderNo(), ShipmentOrderLogService.ACTION_UPDATE, summary);
+        }
     }
 
     /**
@@ -195,10 +218,19 @@ public class ShipmentOrderService {
         // 1.校验商品明细不能为空！
         validateBeforeShipment(bo);
         // 2. 保存入库单和入库单明细
-        if (Objects.isNull(bo.getId())) {
+        boolean isNew = Objects.isNull(bo.getId());
+        // 状态要在保存前读，保存完就分不出这次是不是真的发生了「出库」这个动作了
+        Integer beforeStatus = isNew ? null : statusOf(bo.getId());
+        if (isNew) {
             insertByBo(bo);
         } else {
             updateByBo(bo);
+        }
+        // 只有「本来是暂存、这次才真出库」才单记一条：新建时直接出库的，
+        // CREATE 那条已经写明了，再记一条 SHIPMENT 就是同一个动作记两遍。
+        if (!isNew && !ServiceConstants.ShipmentOrderStatus.FINISH.equals(beforeStatus)) {
+            shipmentOrderLogService.record(bo.getId(), bo.getOrderNo(), ShipmentOrderLogService.ACTION_SHIPMENT,
+                isRecordOnly(bo) ? "由暂存转为正式记录（不影响库存）" : "完成出库");
         }
         // 3.纯记录单到此为止：它的明细不挂 SKU，只是把这笔交易的价格留个底，
         //   既不能扣库存，也不该混进库存流水（流水的前后数对它没有意义）。
@@ -229,6 +261,22 @@ public class ShipmentOrderService {
         if (Boolean.TRUE.equals(exist.getRecordOnly()) != isRecordOnly(bo)) {
             throw new BaseException("单据用途已保存，不能在「正常出库」和「纯记录」之间切换，请新建一张单");
         }
+    }
+
+    /**
+     * 只取状态，不带明细，比 queryById 轻
+     */
+    private Integer statusOf(Long id) {
+        ShipmentOrder exist = shipmentOrderMapper.selectById(id);
+        return exist == null ? null : exist.getOrderStatus();
+    }
+
+    private String buildCreateSummary(ShipmentOrderBo bo) {
+        boolean finished = ServiceConstants.ShipmentOrderStatus.FINISH.equals(bo.getOrderStatus());
+        if (isRecordOnly(bo)) {
+            return finished ? "新建纯记录单" : "暂存纯记录单";
+        }
+        return finished ? "新建出库单并完成出库" : "暂存出库单";
     }
 
     /**

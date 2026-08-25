@@ -95,6 +95,23 @@ public class ShipmentOrderDetailService extends ServiceImpl<ShipmentOrderDetailM
         shipmentOrderDetailMapper.deleteBatchIds(ids);
     }
 
+    /**
+     * 删掉这张单里不在 keepIds 之列的明细行。
+     *
+     * saveOrUpdateBatch 只增不改删——提交里去掉的行会一直留在库里。正常出库单靠前端
+     * 单独调删除接口补偿，但纯记录单是拿来反复改的，保存就该以本次提交为准，
+     * 否则删掉的行既阴魂不散，变更历史里也会每次都刷出一条「删除明细」。
+     */
+    @Transactional
+    public void removeDetailsNotIn(Long orderId, Collection<Long> keepIds) {
+        LambdaQueryWrapper<ShipmentOrderDetail> lqw = Wrappers.lambdaQuery();
+        lqw.eq(ShipmentOrderDetail::getOrderId, orderId);
+        if (CollUtil.isNotEmpty(keepIds)) {
+            lqw.notIn(ShipmentOrderDetail::getId, keepIds);
+        }
+        shipmentOrderDetailMapper.delete(lqw);
+    }
+
     @Transactional
     public void saveDetails(List<ShipmentOrderDetail> list) {
         if (CollUtil.isEmpty(list)) {

@@ -67,7 +67,7 @@
             <el-form-item label="客户" prop="merchantId">
               <el-select v-model="queryParams.merchantId" placeholder="请选择客户" clearable filterable
                          style="width: 200px" @change="handleQuery">
-                <el-option v-for="item in useWmsStore().merchantList.filter(m => m.merchantType != 2)"
+                <el-option v-for="item in useWmsStore().merchantList.filter(m => m.merchantType == 1)"
                            :key="item.id" :label="item.merchantName" :value="item.id"/>
               </el-select>
             </el-form-item>
@@ -222,6 +222,21 @@
               </el-table>
               <h3>补充图片</h3>
               <order-image-gallery :image-ids="props.row.supplementImageIds" />
+              <h3>变更历史</h3>
+              <el-timeline v-if="orderLogs[props.row.id]?.length" style="padding-left: 4px">
+                <el-timeline-item
+                  v-for="log in orderLogs[props.row.id]"
+                  :key="log.id"
+                  :timestamp="log.createTime + '　' + (log.createBy || '未知用户')"
+                  :type="logType(log.action)"
+                  placement="top"
+                >
+                  <span class="log-action">{{ logLabel(log.action) }}</span>
+                  <span v-if="log.summary" class="log-summary">{{ log.summary }}</span>
+                </el-timeline-item>
+              </el-timeline>
+              <el-empty v-else-if="logLoading[props.row.id]" description="加载中…" :image-size="48" />
+              <el-empty v-else description="暂无变更历史" :image-size="48" />
             </div>
           </template>
         </el-table-column>
@@ -294,11 +309,11 @@
                 title="提示"
                 :width="300"
                 trigger="hover"
-                :disabled="scope.row.orderStatus === 0"
+                :disabled="editable(scope.row)"
                 :content="'出库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '出库' : '作废') + '，无法修改！' "
               >
                 <template #reference>
-                  <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:shipment:all']" :disabled="[-1, 1].includes(scope.row.orderStatus)">修改</el-button>
+                  <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:shipment:all']" :disabled="!editable(scope.row)">修改</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handleGoDetail(scope.row)" v-hasPermi="['wms:shipment:all']">{{ expandedRowKeys.includes(scope.row.id) ? '收起' : '查看' }}</el-button>
@@ -349,8 +364,8 @@
           <div class="mobile-order-card__row"><span>创建时间</span><span>{{ parseTime(row.createTime, '{mm}-{dd} {hh}:{ii}') }}</span></div>
           <div class="mobile-order-card__actions">
             <el-button @click="handleGoDetail(row)">{{ expandedRowKeys.includes(row.id) ? '收起' : '查看' }}</el-button>
-            <el-button type="primary" :disabled="[-1, 1].includes(row.orderStatus)" @click="handleUpdate(row)">
-              {{ row.recordOnly ? '继续编辑' : '继续出库' }}
+            <el-button type="primary" :disabled="!editable(row)" @click="handleUpdate(row)">
+              {{ row.recordOnly ? '修改' : '继续出库' }}
             </el-button>
           </div>
           <div v-if="expandedRowKeys.includes(row.id)" class="mobile-detail-panel">
@@ -369,6 +384,16 @@
               </template>
             </div>
             <order-image-gallery :image-ids="row.supplementImageIds" />
+            <div class="mobile-log-list" v-if="orderLogs[row.id]?.length">
+              <strong>变更历史</strong>
+              <div v-for="log in orderLogs[row.id]" :key="log.id" class="mobile-log-item">
+                <div class="mobile-log-item__head">
+                  <span>{{ logLabel(log.action) }}</span>
+                  <small>{{ log.createBy || '未知用户' }} · {{ log.createTime }}</small>
+                </div>
+                <div v-if="log.summary">{{ log.summary }}</div>
+              </div>
+            </div>
           </div>
         </div>
         <el-empty v-if="!loading && !shipmentOrderList.length" description="没有找到出库单" />
@@ -505,7 +530,7 @@
 </template>
 
 <script setup name="ShipmentOrder">
-import {listShipmentOrder, delShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
+import {listShipmentOrder, delShipmentOrder, getShipmentOrder, getShipmentOrderLogs} from "@/api/wms/shipmentOrder";
 import {listByShipmentOrderId, getLastPrices} from "@/api/wms/shipmentOrderDetail";
 import {getCurrentInstance, reactive, ref, computed, watch, toRefs, onMounted, onBeforeUnmount} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
@@ -601,6 +626,12 @@ const { queryParams } = toRefs(data);
 const dateRange = ref([]);
 
 /** 业务日期和录入日期不是同一天，说明是事后补的单 */
+/**
+ * 能不能改。正常出库单出库/作废后就锁死——库存已经动过，改了对不上账。
+ * 纯记录单从头到尾不碰库存，价格记错了得能回来改，所以只要没作废就一直可改。
+ */
+const editable = (row) => (row.recordOnly ? row.orderStatus !== -1 : row.orderStatus === 0)
+
 /** 纯记录单整行转黄，列表里一眼能挑出来 */
 const rowClassName = ({ row }) => (row.recordOnly ? 'record-only-row' : '')
 
@@ -690,6 +721,7 @@ function handleGoDetail(row) {
     // 展开
     expandedRowKeys.value.push(row.id)
     loadShipmentOrderDetail(row)
+    loadOrderLogs(row)
   }
 }
 
@@ -825,7 +857,41 @@ function handleExpandExchange(value, expandedRows) {
   }
   expandedRowKeys.value = expandedRows.map(it => it.id)
   loadShipmentOrderDetail(value)
+  loadOrderLogs(value)
 }
+
+// 变更历史 start
+// orderId -> 历史列表；展开时才拉，列表页不预加载
+const orderLogs = ref({})
+const logLoading = ref({})
+
+const LOG_LABELS = {
+  CREATE: '建单',
+  UPDATE: '修改',
+  SHIPMENT: '出库 / 保存记录',
+  VOID: '作废'
+}
+const LOG_TYPES = {
+  CREATE: 'primary',
+  UPDATE: 'warning',
+  SHIPMENT: 'success',
+  VOID: 'danger'
+}
+const logLabel = (action) => LOG_LABELS[action] || action
+const logType = (action) => LOG_TYPES[action] || 'info'
+
+function loadOrderLogs(row) {
+  logLoading.value = { ...logLoading.value, [row.id]: true }
+  getShipmentOrderLogs(row.id).then(res => {
+    orderLogs.value = { ...orderLogs.value, [row.id]: res.data || [] }
+  }).catch(() => {
+    // 历史拉不到不该挡住看明细，留空即可
+    orderLogs.value = { ...orderLogs.value, [row.id]: [] }
+  }).finally(() => {
+    logLoading.value = { ...logLoading.value, [row.id]: false }
+  })
+}
+// 变更历史 end
 
 function loadShipmentOrderDetail(row) {
   const index = shipmentOrderList.value.findIndex(it => it.id === row.id)
@@ -895,6 +961,48 @@ onBeforeUnmount(() => {
 
 .el-table .record-only-row:hover > td.el-table__cell {
   background: rgba(230, 162, 60, 0.22) !important;
+}
+
+.log-action {
+  display: inline-block;
+  font-weight: 600;
+  margin-right: 8px;
+  color: #303133;
+}
+
+.log-summary {
+  color: #606266;
+  word-break: break-all;
+}
+
+.mobile-log-list {
+  margin-top: 12px;
+
+  > strong {
+    display: block;
+    margin-bottom: 6px;
+  }
+}
+
+.mobile-log-item {
+  padding: 8px 0;
+  border-top: 1px dashed #e4e7ed;
+  font-size: 13px;
+  line-height: 1.7;
+  word-break: break-all;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-weight: 600;
+
+    small {
+      font-weight: 400;
+      color: #909399;
+      white-space: nowrap;
+    }
+  }
 }
 
 .mobile-order-card.record-only-card {

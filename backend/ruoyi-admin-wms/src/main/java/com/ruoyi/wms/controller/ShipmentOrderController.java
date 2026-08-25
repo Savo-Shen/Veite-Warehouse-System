@@ -13,7 +13,9 @@ import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.common.web.core.BaseController;
 import com.ruoyi.wms.domain.bo.ShipmentOrderBo;
+import com.ruoyi.wms.domain.vo.ShipmentOrderLogVo;
 import com.ruoyi.wms.domain.vo.ShipmentOrderVo;
+import com.ruoyi.wms.service.ShipmentOrderLogService;
 import com.ruoyi.wms.service.ShipmentOrderService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +38,7 @@ import java.util.List;
 public class ShipmentOrderController extends BaseController {
 
     private final ShipmentOrderService shipmentOrderService;
+    private final ShipmentOrderLogService shipmentOrderLogService;
 
     /**
      * 查询出库单列表
@@ -67,6 +70,16 @@ public class ShipmentOrderController extends BaseController {
     public R<ShipmentOrderVo> getInfo(@NotNull(message = "主键不能为空")
                                      @PathVariable Long id) {
         return R.ok(shipmentOrderService.queryById(id));
+    }
+
+    /**
+     * 查询出库单的变更历史（谁在什么时候改了什么），新的在前
+     */
+    @SaCheckPermission("wms:shipment:all")
+    @GetMapping("/{id}/logs")
+    public R<List<ShipmentOrderLogVo>> logs(@NotNull(message = "主键不能为空")
+                                            @PathVariable Long id) {
+        return R.ok(shipmentOrderLogService.queryByOrderId(id));
     }
 
     /**
