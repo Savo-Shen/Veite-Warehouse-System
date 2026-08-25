@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.EcCategoryMapper">
+
+    <select id="selectWithCount" resultType="com.ruoyi.wms.domain.vo.EcCategoryVo">
+        SELECT
+            e.id, e.ec_code AS ecCode, e.ec_l1 AS ecL1, e.ec_l2 AS ecL2,
+            e.pdd_cat_id AS pddCatId, e.pdd_cat_path AS pddCatPath,
+            e.tb_cat_id  AS tbCatId,  e.tb_cat_path  AS tbCatPath,
+            e.dy_cat_id  AS dyCatId,  e.dy_cat_path  AS dyCatPath,
+            e.order_num AS orderNum, e.remark,
+            (SELECT COUNT(*) FROM ec_product p WHERE p.ec_category_id = e.id) AS productCount
+        FROM ec_category e
+        ORDER BY e.order_num
+    </select>
+
+</mapper>
