@@ -46,7 +46,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 and history.warehouse_id=#{bo.warehouseId}
             </if>
             <if test="bo.startTime != null and bo.startTime != '' and bo.endTime != null and bo.endTime != ''">
-                and (history.create_time between #{bo.startTime} and #{bo.endTime})
+                and (history.biz_date between date(#{bo.startTime}) and date(#{bo.endTime}))
             </if>
             <if test="bo.keyword != null and bo.keyword != ''">
                 <foreach collection="bo.keyword.split(' ')" item="word">
@@ -61,6 +61,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 </foreach>
             </if>
         </where>
-        order by history.create_time desc
+        order by history.biz_date desc, history.create_time desc
     </select>
 </mapper>

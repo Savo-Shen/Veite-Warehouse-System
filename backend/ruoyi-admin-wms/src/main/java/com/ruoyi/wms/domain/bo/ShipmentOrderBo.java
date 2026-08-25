@@ -26,6 +26,11 @@ public class ShipmentOrderBo extends BaseOrderBo<ShipmentOrderDetailBo> {
     private Long optType;
 
     /**
+     * 纯记录单：只留价格备查，不扣库存、不写库存流水，商品名手工输入不挂 SKU
+     */
+    private Boolean recordOnly;
+
+    /**
      * 订单号
      */
     private String bizOrderNo;

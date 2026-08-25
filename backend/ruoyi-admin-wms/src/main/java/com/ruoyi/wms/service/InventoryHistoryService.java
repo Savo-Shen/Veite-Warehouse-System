@@ -17,6 +17,7 @@ import com.ruoyi.wms.utils.KeywordUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -36,6 +37,8 @@ public class InventoryHistoryService extends ServiceImpl<InventoryHistoryMapper,
 
     public void saveInventoryHistory(BaseOrderBo<? extends BaseOrderDetailBo> bo,Integer orderType,Boolean isAdd){
         List<InventoryHistory> inventoryHistoryList = new LinkedList<>();
+        // 补录的单子，流水也要落在单据那天，否则流水和单据对不上
+        LocalDate bizDate = bo.getBizDate() == null ? LocalDate.now() : bo.getBizDate();
         bo.getDetails().forEach(detail -> {
             InventoryHistory inventoryHistory = new InventoryHistory();
             inventoryHistory.setOrderId(bo.getId());
@@ -51,6 +54,7 @@ public class InventoryHistoryService extends ServiceImpl<InventoryHistoryMapper,
             inventoryHistory.setAmount(detail.getAmount());
             inventoryHistory.setBeforeQuantity(detail.getBeforeQuantity());
             inventoryHistory.setAfterQuantity(detail.getAfterQuantity());
+            inventoryHistory.setBizDate(bizDate);
             inventoryHistoryList.add(inventoryHistory);
         });
         this.saveBatch(inventoryHistoryList);

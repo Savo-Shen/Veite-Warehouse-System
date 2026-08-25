@@ -3,6 +3,7 @@ package com.ruoyi.wms.service;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -194,10 +195,15 @@ public class ItemSkuService extends ServiceImpl<ItemSkuMapper, ItemSku> {
 
     public void setItemSkuMap(List<? extends BaseOrderDetailVo> details){
         if (CollUtil.isNotEmpty(details)) {
+            // 纯记录单的明细不挂 SKU，skuId 为空，不能带进 in 查询
             Set<Long> skuIds = details
                 .stream()
                 .map(BaseOrderDetailVo::getSkuId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+            if (skuIds.isEmpty()) {
+                return;
+            }
 
             Map<Long, ItemSkuMapVo> itemSkuMap = this.queryItemSkuMapVosByIds(skuIds);
 

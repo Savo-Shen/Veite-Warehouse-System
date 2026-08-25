@@ -6,6 +6,7 @@ import com.ruoyi.wms.domain.entity.ReceiptOrder;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import java.time.LocalDate;
 
 /**
  * 入库单视图对象 wms_receipt_order
@@ -36,4 +37,10 @@ public class ReceiptOrderVo extends BaseOrderVo<ReceiptOrderDetailVo> {
      */
     @ExcelProperty(value = "业务订单号")
     private String bizOrderNo;
+
+    /**
+     * 业务日期：这单实际发生在哪天。补前几天的单子时选过去的日期，
+     * 列表、库存流水、看板统计都按它算；create_time 仍然是录入时间。
+     */
+    private LocalDate bizDate;
 }

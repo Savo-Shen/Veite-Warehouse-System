@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 // import java.util.Map;
@@ -104,6 +105,8 @@ public class ReceiptOrderService {
         lqw.eq(bo.getMerchantId() != null, ReceiptOrder::getMerchantId, bo.getMerchantId());
         lqw.eq(bo.getTotalAmount() != null, ReceiptOrder::getTotalAmount, bo.getTotalAmount());
         lqw.eq(bo.getOrderStatus() != null, ReceiptOrder::getOrderStatus, bo.getOrderStatus());
+        // 按业务日期倒序，同一天内再按录入时间，补录的单子会落回它该在的位置
+        lqw.orderByDesc(ReceiptOrder::getBizDate);
         lqw.orderByDesc(ReceiptOrder::getCreateTime);
         return lqw;
     }
@@ -116,6 +119,7 @@ public class ReceiptOrderService {
         // 校验入库单号唯一性
         validateReceiptOrderNo(bo.getOrderNo());
         fillOrderTotals(bo);
+        fillBizDate(bo);
         // 创建入库单
         ReceiptOrder add = MapstructUtils.convert(bo, ReceiptOrder.class);
         receiptOrderMapper.insert(add);
@@ -168,6 +172,7 @@ public class ReceiptOrderService {
     @Transactional
     public void updateByBo(ReceiptOrderBo bo) {
         fillOrderTotals(bo);
+        fillBizDate(bo);
         // 更新入库单
         ReceiptOrder update = MapstructUtils.convert(bo, ReceiptOrder.class);
         receiptOrderMapper.updateById(update);
@@ -216,6 +221,15 @@ public class ReceiptOrderService {
         receiptOrderLqw.eq(ReceiptOrder::getOrderNo, receiptOrderNo);
         ReceiptOrder receiptOrder = receiptOrderMapper.selectOne(receiptOrderLqw);
         Assert.isNull(receiptOrder, "入库单号重复，请手动修改");
+    }
+
+    /**
+     * 没选业务日期就按今天算。老单据（biz_date 为空的）已经在迁移脚本里回填成 create_time 那天。
+     */
+    private void fillBizDate(ReceiptOrderBo bo) {
+        if (bo.getBizDate() == null) {
+            bo.setBizDate(LocalDate.now());
+        }
     }
 
     private void fillOrderTotals(ReceiptOrderBo bo) {

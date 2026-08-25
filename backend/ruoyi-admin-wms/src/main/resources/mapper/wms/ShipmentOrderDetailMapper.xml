@@ -10,7 +10,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                d.quantity    as quantity,
                d.amount      as amount,
                o.order_no    as orderNo,
-               o.create_time as createTime
+               o.create_time as createTime,
+               o.biz_date    as bizDate
         from wms_shipment_order_detail d
         inner join wms_shipment_order o on d.order_id = o.id
         where o.merchant_id = #{merchantId}
@@ -21,7 +22,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <foreach collection="skuIds" item="skuId" open="(" separator="," close=")">
             #{skuId}
         </foreach>
-        order by o.create_time desc, d.id desc
+        order by o.biz_date desc, o.create_time desc, d.id desc
     </select>
 
 </mapper>

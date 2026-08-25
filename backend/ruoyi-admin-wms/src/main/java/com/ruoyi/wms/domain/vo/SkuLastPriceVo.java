@@ -5,6 +5,7 @@ import lombok.Data;
 import java.io.Serial;
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Date;
 
 /**
@@ -44,7 +45,12 @@ public class SkuLastPriceVo implements Serializable {
     private String orderNo;
 
     /**
-     * 上次出库时间
+     * 上次出库时间（录入时间）
      */
     private Date createTime;
+
+    /**
+     * 上次出库的业务日期，补录的单子按这个算「最近」
+     */
+    private LocalDate bizDate;
 }

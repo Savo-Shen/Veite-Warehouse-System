@@ -86,7 +86,7 @@
                 @keyup.enter="handleQuery"
               />
             </el-form-item>
-            <el-form-item label="创建时间">
+            <el-form-item label="出库日期">
               <el-date-picker
                 v-model="dateRange"
                 type="daterange"
@@ -146,6 +146,7 @@
                 @expand-change="handleExpandExchange"
                 :row-key="getRowKey"
                 :expand-row-keys="expandedRowKeys"
+                :row-class-name="rowClassName"
                 empty-text="暂无出库单"
                 cell-class-name="vertical-top-cell"
       >
@@ -153,7 +154,33 @@
           <template #default="props">
             <div style="padding: 0 50px 20px 50px">
               <h3>商品明细</h3>
-              <el-table :data="props.row.details" v-loading="detailLoading[props.$index]" empty-text="暂无商品明细">
+              <el-table v-if="props.row.recordOnly" :data="props.row.details"
+                        v-loading="detailLoading[props.$index]" empty-text="暂无记录明细">
+                <el-table-column label="商品名称" prop="itemName" />
+                <el-table-column label="成本价(元)" align="right" width="140">
+                  <template #default="{ row }">
+                    <span v-if="hasValue(row.costPrice)">￥{{ Number(row.costPrice).toFixed(2) }}</span>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="销售价(元)" align="right" width="140">
+                  <template #default="{ row }">
+                    <span v-if="hasValue(row.salePrice)">￥{{ Number(row.salePrice).toFixed(2) }}</span>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="毛利(元)" align="right" width="140">
+                  <template #default="{ row }">
+                    <span v-if="grossProfit(row) !== undefined"
+                          :style="{ color: grossProfit(row) >= 0 ? '#67c23a' : '#f56c6c' }">
+                      ￥{{ grossProfit(row).toFixed(2) }}
+                    </span>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="备注" prop="remark" />
+              </el-table>
+              <el-table v-else :data="props.row.details" v-loading="detailLoading[props.$index]" empty-text="暂无商品明细">
                 <el-table-column label="商品名称">
                   <template #default="{ row }">
                     <div>{{ row?.item?.itemName }}</div>
@@ -167,6 +194,12 @@
                 <el-table-column label="数量" prop="quantity" align="right">
                   <template #default="{ row }">
                     <el-statistic :value="Number(row.quantity)" :precision="0"/>
+                  </template>
+                </el-table-column>
+                <el-table-column label="单价(元)" align="right" width="120">
+                  <template #default="{ row }">
+                    <span v-if="hasValue(row.salePrice)">￥{{ Number(row.salePrice).toFixed(2) }}</span>
+                    <span v-else>-</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="金额(元)" align="right">
@@ -183,18 +216,22 @@
         </el-table-column>
         <el-table-column label="单号/业务单号" align="left" min-width="120">
           <template #default="{ row }">
+            <el-tag v-if="row.recordOnly" type="warning" effect="dark" size="small" style="margin-bottom: 4px">
+              纯记录 · 不扣库存
+            </el-tag>
             <div>单号：{{ row.orderNo }}</div>
             <div v-if="row.bizOrderNo">业务单号：{{ row.bizOrderNo }}</div>
           </template>
         </el-table-column>
         <el-table-column label="仓库" align="left">
           <template #default="{ row }">
-            <div>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName }}</div>
+            <div v-if="row.recordOnly" style="color: #c0c4cc">不涉及</div>
+            <div v-else>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName }}</div>
           </template>
         </el-table-column>
         <el-table-column label="总数量/总金额(元)" align="left" min-width="100">
           <template #default="{ row }">
-            <div class="flex-space-between">
+            <div class="flex-space-between" v-if="!row.recordOnly">
               <span>数量：</span>
               <el-statistic :value="Number(row.totalQuantity)" :precision="0"/>
             </div>
@@ -212,6 +249,12 @@
         <el-table-column label="出库类型" align="center" prop="optType" width="100">
           <template #default="{ row }">
             <dict-tag :options="wms_shipment_type" :value="row.optType" />
+          </template>
+        </el-table-column>
+        <el-table-column label="出库日期" align="left" width="110" prop="bizDate">
+          <template #default="{ row }">
+            <div>{{ row.bizDate || parseTime(row.createTime, '{y}-{m}-{d}') }}</div>
+            <div v-if="isBackdated(row)" class="backdate-flag">补录</div>
           </template>
         </el-table-column>
         <el-table-column label="客户" align="left" prop="merchantId">
@@ -275,24 +318,44 @@
       </el-table>
 
       <div v-loading="loading" class="mobile-only mobile-order-list">
-        <div v-for="row in shipmentOrderList" :key="row.id" class="mobile-order-card">
+        <div v-for="row in shipmentOrderList" :key="row.id" class="mobile-order-card"
+             :class="{ 'record-only-card': row.recordOnly }">
           <div class="mobile-order-card__header">
             <span>{{ row.orderNo }}</span>
-            <dict-tag :options="wms_shipment_status" :value="row.orderStatus" />
+            <div style="display: flex; gap: 6px; align-items: center">
+              <el-tag v-if="row.recordOnly" type="warning" effect="dark" size="small">纯记录</el-tag>
+              <dict-tag :options="wms_shipment_status" :value="row.orderStatus" />
+            </div>
           </div>
           <div v-if="row.bizOrderNo" class="mobile-order-card__row"><span>业务单号</span><strong>{{ row.bizOrderNo }}</strong></div>
-          <div class="mobile-order-card__row"><span>仓库</span><span>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName || '-' }}</span></div>
+          <div class="mobile-order-card__row" v-if="!row.recordOnly"><span>仓库</span><span>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName || '-' }}</span></div>
           <div class="mobile-order-card__row"><span>客户</span><span>{{ useWmsStore().merchantMap.get(row.merchantId)?.merchantName || '-' }}</span></div>
-          <div class="mobile-order-card__row"><span>数量 / 金额</span><span>{{ Number(row.totalQuantity || 0).toFixed(0) }} / {{ row.totalAmount ?? '-' }}</span></div>
+          <div class="mobile-order-card__row" v-if="row.recordOnly"><span>金额</span><span>{{ row.totalAmount ?? '-' }}</span></div>
+          <div class="mobile-order-card__row" v-else><span>数量 / 金额</span><span>{{ Number(row.totalQuantity || 0).toFixed(0) }} / {{ row.totalAmount ?? '-' }}</span></div>
+          <div class="mobile-order-card__row">
+            <span>出库日期</span>
+            <span>{{ row.bizDate || parseTime(row.createTime, '{y}-{m}-{d}') }}<em v-if="isBackdated(row)" class="backdate-flag"> 补录</em></span>
+          </div>
           <div class="mobile-order-card__row"><span>创建时间</span><span>{{ parseTime(row.createTime, '{mm}-{dd} {hh}:{ii}') }}</span></div>
           <div class="mobile-order-card__actions">
             <el-button @click="handleGoDetail(row)">{{ expandedRowKeys.includes(row.id) ? '收起' : '查看' }}</el-button>
-            <el-button type="primary" :disabled="[-1, 1].includes(row.orderStatus)" @click="handleUpdate(row)">继续出库</el-button>
+            <el-button type="primary" :disabled="[-1, 1].includes(row.orderStatus)" @click="handleUpdate(row)">
+              {{ row.recordOnly ? '继续编辑' : '继续出库' }}
+            </el-button>
           </div>
           <div v-if="expandedRowKeys.includes(row.id)" class="mobile-detail-panel">
             <div v-for="detail in row.details || []" :key="detail.id" class="mobile-detail-item">
-              <strong>{{ detail.item?.itemName }} / {{ detail.itemSku?.skuName }}</strong>
-              <div class="mobile-order-card__row"><span>数量</span><span>{{ Number(detail.quantity || 0).toFixed(0) }}</span></div>
+              <template v-if="row.recordOnly">
+                <strong>{{ detail.itemName }}</strong>
+                <div class="mobile-order-card__row"><span>成本 / 销售</span>
+                  <span>{{ hasValue(detail.costPrice) ? '￥' + Number(detail.costPrice).toFixed(2) : '-' }}
+                    / {{ hasValue(detail.salePrice) ? '￥' + Number(detail.salePrice).toFixed(2) : '-' }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <strong>{{ detail.item?.itemName }} / {{ detail.itemSku?.skuName }}</strong>
+                <div class="mobile-order-card__row"><span>数量</span><span>{{ Number(detail.quantity || 0).toFixed(0) }}</span></div>
+              </template>
             </div>
             <order-image-gallery :image-ids="row.supplementImageIds" />
           </div>
@@ -526,6 +589,25 @@ const { queryParams } = toRefs(data);
 // 创建时间范围
 const dateRange = ref([]);
 
+/** 业务日期和录入日期不是同一天，说明是事后补的单 */
+/** 纯记录单整行转黄，列表里一眼能挑出来 */
+const rowClassName = ({ row }) => (row.recordOnly ? 'record-only-row' : '')
+
+const hasValue = (val) => val !== undefined && val !== null && val !== '' && !Number.isNaN(Number(val))
+
+/** 单行毛利。成本价和销售价都填了才算 */
+const grossProfit = (row) => {
+  if (!hasValue(row.costPrice) || !hasValue(row.salePrice)) {
+    return undefined
+  }
+  return Number(row.salePrice) - Number(row.costPrice)
+}
+
+const isBackdated = (row) => {
+  if (!row.bizDate || !row.createTime) return false
+  return row.bizDate !== proxy.parseTime(row.createTime, '{y}-{m}-{d}')
+}
+
 /** 查询入库单列表 */
 function getList() {
   loading.value = true;
@@ -625,7 +707,7 @@ async function handlePrint(row, sizeKey) {
       merchantPhone: merchant?.mobile || merchant?.tel || '',
       merchantAddress: merchant?.address || '',
       createBy: shipmentOrder.createBy || '',
-      createTime: proxy.parseTime(shipmentOrder.createTime, '{y}-{m}-{d}') || '',
+      createTime: shipmentOrder.bizDate || proxy.parseTime(shipmentOrder.createTime, '{y}-{m}-{d}') || '',
       remark: shipmentOrder.remark || '',
       deliveryBy: '',
       receiveBy: ''
@@ -648,12 +730,26 @@ async function handlePrint(row, sizeKey) {
       const quantity = Number(detail.quantity || 0)
       const amount = Number(detail.amount || 0)
       const lastPrice = lastPriceMap[String(detail.skuId)]
-      const preferredPrice = lastPrice !== undefined && lastPrice !== null
-        ? lastPrice
-        : detail.itemSku?.sellingPrice
+      // 落库的销售价最准，是这单当时真实成交的价；没有才退回历史报价、再退回商品售价
+      const preferredPrice = detail.salePrice !== undefined && detail.salePrice !== null
+        ? detail.salePrice
+        : (lastPrice !== undefined && lastPrice !== null
+          ? lastPrice
+          : detail.itemSku?.sellingPrice)
       const unitPrice = preferredPrice === undefined || preferredPrice === null || preferredPrice === ''
         ? NaN
         : Number(preferredPrice)
+      if (shipmentOrder.recordOnly) {
+        // 纯记录单：商品名是手工输入的，也没有数量，单价直接用记录下来的销售价
+        return {
+          itemName: detail.itemName || '',
+          skuName: '',
+          quantity: '',
+          unitPrice: detail.salePrice !== undefined && detail.salePrice !== null
+            ? Number(detail.salePrice).toFixed(2) : '',
+          amount: amount.toFixed(2)
+        }
+      }
       return {
         itemName: detail.item?.itemName || '',
         skuName: detail.itemSku?.skuName || '',
@@ -780,6 +876,26 @@ onBeforeUnmount(() => {
 })
 </script>
 <style lang="scss">
+/* 纯记录单：整行转黄，和真正出过货的单子区分开 */
+.el-table .record-only-row > td.el-table__cell {
+  background: rgba(230, 162, 60, 0.12) !important;
+}
+
+.el-table .record-only-row:hover > td.el-table__cell {
+  background: rgba(230, 162, 60, 0.22) !important;
+}
+
+.mobile-order-card.record-only-card {
+  border-left: 3px solid #e6a23c;
+  background: rgba(230, 162, 60, 0.08);
+}
+
+.backdate-flag {
+  font-size: 12px;
+  color: #e6a23c;
+  font-style: normal;
+}
+
 .el-statistic__content {
   font-size: 14px;
 }

@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -55,6 +56,13 @@ public class BaseOrderBo<T extends BaseOrderDetailBo> extends BaseEntity {
      * 补充图片 OSS ID，多个用逗号分隔
      */
     private String supplementImageIds;
+
+    /**
+     * 业务日期：这单实际发生在哪天。补前几天的单子时选过去的日期，
+     * 列表、库存流水、看板统计都按它算；create_time 仍然是录入时间。
+     * 只有出入库单的表里有这一列，移库/盘点不传，走当天。
+     */
+    private LocalDate bizDate;
 
     /**
      * 商品信息

@@ -1,19 +1,48 @@
 <template>
   <div>
-    <div class="receipt-order-edit-wrapper app-container" style="margin-bottom: 60px" v-loading="loading">
+    <div class="receipt-order-edit-wrapper app-container" :class="{ 'record-only-mode': form.recordOnly }"
+         style="margin-bottom: 60px" v-loading="loading">
       <section class="mobile-only mobile-order-hero">
         <div>
-          <small>{{ form.id ? '编辑出库单' : '新建出库单' }}</small>
+          <small>{{ form.recordOnly ? (form.id ? '编辑纯记录单' : '新建纯记录单') : (form.id ? '编辑出库单' : '新建出库单') }}</small>
           <h1>{{ form.orderNo || '待生成单号' }}</h1>
-          <p>{{ warehouseName(form.warehouseId) }} · {{ orderTypeLabel }}</p>
+          <p v-if="form.recordOnly">只记价格 · 不扣库存 · {{ orderTypeLabel }}</p>
+          <p v-else>{{ warehouseName(form.warehouseId) }} · {{ orderTypeLabel }}</p>
         </div>
         <div class="mobile-order-total">
-          <span>数量</span>
-          <strong>{{ Number(form.totalQuantity || 0).toFixed(0) }}</strong>
+          <span>{{ form.recordOnly ? '金额' : '数量' }}</span>
+          <strong v-if="form.recordOnly">{{ Number(form.totalAmount || 0).toFixed(0) }}</strong>
+          <strong v-else>{{ Number(form.totalQuantity || 0).toFixed(0) }}</strong>
         </div>
       </section>
-      <el-card header="出库单基本信息" class="order-info-card">
+      <el-card class="order-info-card">
+        <template #header>
+          <div class="order-info-header">
+            <span>{{ form.recordOnly ? '纯记录单基本信息' : '出库单基本信息' }}</span>
+            <el-tag v-if="form.recordOnly" type="warning" effect="dark" size="small">不扣库存</el-tag>
+          </div>
+        </template>
         <el-form label-width="108px" :model="form" ref="shipmentForm" :rules="rules">
+          <el-row :gutter="24">
+            <el-col :span="24">
+              <el-form-item label="单据用途">
+                <el-switch
+                  v-model="form.recordOnly"
+                  :disabled="!!form.id"
+                  inline-prompt
+                  size="large"
+                  active-text="纯记录"
+                  inactive-text="正常出库"
+                  @change="handleToggleRecordOnly"
+                />
+                <span class="record-only-hint" v-if="form.id">单据已保存，用途不能再改</span>
+                <div v-if="form.recordOnly" class="record-only-banner">
+                  纯记录单：只留商品名称和成本价 / 销售价备查，<strong>不扣库存、不写库存流水</strong>。
+                  商品名手工输入，不用先在商品库里建档。
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
           <el-row :gutter="24">
             <el-col :span="11">
               <el-form-item label="出库单号" prop="orderNo">
@@ -31,9 +60,17 @@
               </el-form-item>
             </el-col>
             <el-col :span="6">
-              <el-form-item label="总数量" prop="totalQuantity">
-                <el-input-number style="width: 100%" v-model="form.totalQuantity" :controls="false" :precision="0"
-                                 :disabled="true"></el-input-number>
+              <el-form-item label="出库日期" prop="bizDate">
+                <el-date-picker
+                  style="width: 100%"
+                  v-model="form.bizDate"
+                  type="date"
+                  placeholder="默认今天"
+                  value-format="YYYY-MM-DD"
+                  :clearable="false"
+                  :disabled-date="disableFutureDate"
+                />
+                <div v-if="isBackdated" class="backdate-tip">补录：这单按 {{ form.bizDate }} 计入统计</div>
               </el-form-item>
             </el-col>
           </el-row>
@@ -87,6 +124,12 @@
                 </el-button>
               </div>
             </el-col>
+            <el-col :span="6" v-if="!form.recordOnly">
+              <el-form-item label="总数量" prop="totalQuantity">
+                <el-input-number style="width: 100%" v-model="form.totalQuantity" :controls="false" :precision="0"
+                                 :disabled="true"></el-input-number>
+              </el-form-item>
+            </el-col>
           </el-row>
           <el-row :gutter="24">
             <el-col :span="24">
@@ -106,12 +149,15 @@
         <template #header>
           <div class="detail-card-header">
             <div>
-              <span>商品明细</span>
+              <span>{{ form.recordOnly ? '记录明细' : '商品明细' }}</span>
               <small class="mobile-only">已选 {{ form.details.length }} 项</small>
             </div>
             <div class="mobile-only" style="display: flex; gap: 8px">
-              <el-button type="primary" plain icon="Plus" @click="showAddItem" :disabled="!form.warehouseId">添加</el-button>
-              <el-button type="warning" plain icon="Plus" @click="showSkuSelect" :disabled="!form.warehouseId">无库存</el-button>
+              <el-button v-if="form.recordOnly" type="warning" plain icon="Plus" @click="addRecordRow">添加一行</el-button>
+              <template v-else>
+                <el-button type="primary" plain icon="Plus" @click="showAddItem" :disabled="!form.warehouseId">添加</el-button>
+                <el-button type="warning" plain icon="Plus" @click="showSkuSelect" :disabled="!form.warehouseId">无库存</el-button>
+              </template>
             </div>
           </div>
         </template>
@@ -130,7 +176,11 @@
                 inactive-text="关闭"
               />
             </div> -->
+            <el-button v-if="form.recordOnly" type="warning" plain size="default" icon="Plus" @click="addRecordRow">
+              添加一行
+            </el-button>
             <el-popover
+              v-else
               placement="left"
               title="提示"
               :width="200"
@@ -150,7 +200,48 @@
               </template>
             </el-popover>
           </div>
-          <el-table :data="form.details" border stripe empty-text="暂无商品明细" class="desktop-only">
+          <el-table v-if="form.recordOnly" :data="form.details" border stripe
+                    empty-text="点上面「添加一行」开始记录" class="desktop-only record-only-table">
+            <el-table-column label="商品名称" min-width="220">
+              <template #default="{ row }">
+                <el-input v-model="row.itemName" placeholder="手工输入商品名称" maxlength="120" />
+              </template>
+            </el-table-column>
+            <el-table-column label="成本价" width="190">
+              <template #default="{ row }">
+                <el-input-number v-model="row.costPrice" placeholder="成本价" :min="0" :precision="2"
+                                 :controls="false" style="width: 100%" />
+              </template>
+            </el-table-column>
+            <el-table-column label="销售价" width="190">
+              <template #default="{ row }">
+                <el-input-number v-model="row.salePrice" placeholder="销售价" :min="0" :precision="2"
+                                 :controls="false" style="width: 100%" @change="handleChangeRecordPrice" />
+              </template>
+            </el-table-column>
+            <el-table-column label="毛利" width="120" align="right">
+              <template #default="{ row }">
+                <span v-if="grossProfit(row) !== undefined"
+                      :style="{ color: grossProfit(row) >= 0 ? '#67c23a' : '#f56c6c', fontWeight: 'bold' }">
+                  ￥{{ grossProfit(row).toFixed(2) }}
+                </span>
+                <span v-else style="color: #c0c4cc">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="备注" min-width="160">
+              <template #default="{ row }">
+                <el-input v-model="row.remark" placeholder="选填" maxlength="100" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="90" align="right" fixed="right">
+              <template #default="scope">
+                <el-button icon="Delete" type="danger" plain size="small"
+                           @click="handleDeleteDetail(scope.row, scope.$index)" link>删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-table v-else :data="form.details" border stripe empty-text="暂无商品明细" class="desktop-only">
             <el-table-column label="商品信息" prop="itemSku.itemName">
               <template #default="{ row }">
                 <div>{{
@@ -204,7 +295,7 @@
                 </div>
                 <div v-if="lastPriceMap[String(row.skuId)]">
                   <el-tooltip
-                    :content="'出库时间：' + parseTime(lastPriceMap[String(row.skuId)].createTime, '{y}-{m}-{d}')
+                    :content="'出库日期：' + (lastPriceMap[String(row.skuId)].bizDate || parseTime(lastPriceMap[String(row.skuId)].createTime, '{y}-{m}-{d}'))
                       + '，单号：' + lastPriceMap[String(row.skuId)].orderNo + '，点击填入'"
                     placement="top"
                   >
@@ -213,6 +304,18 @@
                     </el-link>
                   </el-tooltip>
                 </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="成本价" prop="costPrice" width="150">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.costPrice"
+                  placeholder="选填"
+                  :min="0"
+                  :precision="2"
+                  :controls="false"
+                  style="width: 100%"
+                ></el-input-number>
               </template>
             </el-table-column>
             <el-table-column label="金额" prop="amount" width="220" align="center">
@@ -243,7 +346,31 @@
               </template>
             </el-table-column>
           </el-table>
-          <div class="mobile-only mobile-edit-list">
+          <div v-if="form.recordOnly" class="mobile-only mobile-edit-list">
+            <div v-for="(row, index) in form.details" :key="row.rowKey" class="mobile-edit-card">
+              <div class="mobile-edit-card__title">
+                <el-input v-model="row.itemName" placeholder="手工输入商品名称" maxlength="120" />
+                <el-button type="danger" link icon="Delete" @click="handleDeleteDetail(row, index)">删除</el-button>
+              </div>
+              <div class="mobile-edit-fields">
+                <label>
+                  <span>成本价</span>
+                  <el-input-number v-model="row.costPrice" :min="0" :precision="2" :controls="false" />
+                </label>
+                <label>
+                  <span>销售价</span>
+                  <el-input-number v-model="row.salePrice" :min="0" :precision="2" :controls="false"
+                                   @change="handleChangeRecordPrice" />
+                </label>
+              </div>
+              <el-input v-model="row.remark" placeholder="备注（选填）" maxlength="100" />
+              <div class="mobile-edit-total" v-if="grossProfit(row) !== undefined">
+                毛利：￥{{ grossProfit(row).toFixed(2) }}
+              </div>
+            </div>
+            <el-empty v-if="!form.details.length" description="点「添加一行」开始记录" :image-size="64" />
+          </div>
+          <div v-else class="mobile-only mobile-edit-list">
             <div v-for="(row, index) in form.details" :key="row.id || row.skuId" class="mobile-edit-card">
               <div class="mobile-edit-card__title">
                 <div>
@@ -311,7 +438,9 @@
     <div class="footer-global">
       <div class="btn-box">
         <div class="primary-actions">
-          <el-button @click="doShipment" type="primary" class="ml10">完成出库</el-button>
+          <el-button @click="doShipment" :type="form.recordOnly ? 'warning' : 'primary'" class="ml10">
+            {{ form.recordOnly ? '保存记录' : '完成出库' }}
+          </el-button>
           <el-button @click="updateToInvalid" type="danger" v-if="form.id">作废</el-button>
         </div>
         <div class="secondary-actions">
@@ -342,10 +471,19 @@ const {wms_shipment_type} = proxy.useDict("wms_shipment_type");
 const loading = ref(false)
 const isMobileScreen = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
 const mobileDrawerSize = computed(() => isMobileScreen() ? '100%' : '90%')
+/** 本地当天，YYYY-MM-DD。不能用 toISOString()，那是 UTC，晚上 8 点后会差一天 */
+const today = () => {
+  const d = new Date()
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 const initFormData = {
   id: undefined,
   orderNo: undefined,
+  bizDate: today(),
   optType: "2",
+  recordOnly: false,
   merchantId: undefined,
   bizOrderNo: undefined,
   totalAmount: undefined,
@@ -370,9 +508,17 @@ const data = reactive({
     warehouseId: [
       {required: true, message: "请选择仓库", trigger: ['blur', 'change']}
     ],
+    bizDate: [
+      {required: true, message: "请选择出库日期", trigger: 'change'}
+    ],
   }
 });
+
 const {form, rules} = toRefs(data);
+
+// 单据日期不能选未来
+const disableFutureDate = (date) => date.getTime() > Date.now()
+const isBackdated = computed(() => !!form.value.bizDate && form.value.bizDate !== today())
 const warehouseName = (id) => useWmsStore().warehouseMap.get(id)?.warehouseName || '请选择仓库'
 const orderTypeLabel = computed(() => proxy.selectDictLabel(wms_shipment_type.value, form.value.optType) || '出库类型')
 const cancel = async () => {
@@ -387,6 +533,54 @@ const close = () => {
   const obj = {path: "/shipmentOrder"};
   proxy?.$tab.closeOpenPage(obj);
 }
+// 纯记录单 start
+// 明细不挂 SKU，没有 id 也没有 skuId，v-for 需要一个稳定的 key
+let recordRowSeq = 0
+const nextRowKey = () => `record-${++recordRowSeq}`
+
+const addRecordRow = () => {
+  form.value.details.push({
+    rowKey: nextRowKey(),
+    itemName: '',
+    costPrice: undefined,
+    salePrice: undefined,
+    remark: undefined,
+  })
+}
+
+/** 切换单据用途时清空明细：两种模式的明细结构完全不同，留着只会串味 */
+const handleToggleRecordOnly = (val) => {
+  form.value.details = []
+  selectedInventory.value = []
+  selectedSku.value = []
+  lastPriceMap.value = {}
+  form.value.totalQuantity = 0
+  form.value.totalAmount = undefined
+  if (val) {
+    addRecordRow()
+  }
+}
+
+/** 单行毛利。成本价和销售价都填了才算，缺一个就不显示 */
+const grossProfit = (row) => {
+  if (!hasValue(row.costPrice) || !hasValue(row.salePrice)) {
+    return undefined
+  }
+  return Number(row.salePrice) - Number(row.costPrice)
+}
+
+/** 纯记录单没有数量，总金额就是各行销售价之和（与后端 fillRecordOnlyTotals 口径一致） */
+const handleChangeRecordPrice = () => {
+  let sum = 0
+  form.value.details.forEach(it => {
+    if (hasValue(it.salePrice)) {
+      sum += Number(it.salePrice)
+    }
+  })
+  form.value.totalAmount = Number(sum.toFixed(2))
+}
+// 纯记录单 end
+
 const inventorySelectShow = ref(false)
 const skuSelectShow = ref(false)
 const skuSelectRef = ref(null)
@@ -485,10 +679,12 @@ const applyLastPrice = (row) => {
 // 单价工具 start
 const hasValue = (val) => val !== undefined && val !== null && val !== '' && !Number.isNaN(Number(val))
 
-/** 明细的单价没有落库，回显时由金额/数量反推，缺失时再退回规格售价 */
+/** 单价回显：优先用落库的销售价；老单据没这一列，才退回金额/数量反推，再退回规格售价 */
 const restorePriceFromAmount = (details) => {
   ;(details || []).forEach(it => {
-    if (hasValue(it.amount) && Number(it.quantity) > 0) {
+    if (hasValue(it.salePrice)) {
+      it.price = Number(it.salePrice)
+    } else if (hasValue(it.amount) && Number(it.quantity) > 0) {
       it.price = Number(it.amount) / Number(it.quantity)
     } else if (hasValue(it.itemSku?.sellingPrice)) {
       it.price = Number(it.itemSku.sellingPrice)
@@ -512,7 +708,7 @@ const applySkuPrice = (row, field) => {
 const shipmentForm = ref()
 
 const save = async () => {
-  await proxy?.$modal.confirm('确认暂存出库单吗？');
+  await proxy?.$modal.confirm(form.value.recordOnly ? '确认暂存这张纯记录单吗？' : '确认暂存出库单吗？');
   doSave()
 }
 
@@ -521,12 +717,25 @@ const getParamsBeforeSave = (orderStatus) => {
   if (form.value.details?.length) {
     // 构建参数
     details = form.value.details.map(it => {
+      if (form.value.recordOnly) {
+        // 纯记录单：不挂 SKU、不带数量和仓库，金额和总计由后端按销售价算
+        return {
+          id: it.id,
+          itemName: (it.itemName || '').trim(),
+          costPrice: it.costPrice,
+          salePrice: it.salePrice,
+          remark: it.remark
+        }
+      }
       return {
         id: it.id,
         receiptOrderId: form.value.id,
         skuId: it.skuId,
         amount: it.amount,
         quantity: it.quantity,
+        // 单价以前没落库，回显只能拿金额除数量反推；现在直接存下来
+        salePrice: it.price,
+        costPrice: it.costPrice,
         warehouseId: form.value.warehouseId
       }
     })
@@ -534,7 +743,9 @@ const getParamsBeforeSave = (orderStatus) => {
 
   return {
     id: form.value.id,
+    recordOnly: !!form.value.recordOnly,
     orderNo: form.value.orderNo,
+    bizDate: form.value.bizDate || today(),
     optType: form.value.optType,
     merchantId: form.value.merchantId,
     bizOrderNo: form.value.bizOrderNo,
@@ -593,18 +804,29 @@ getConfigKey('wms.inventory.allowNegative').then(res => {
 }).catch(() => {})
 
 const doShipment = async () => {
-  await proxy?.$modal.confirm('确认出库吗？');
+  await proxy?.$modal.confirm(form.value.recordOnly ? '确认保存这张纯记录单吗？它不会影响库存。' : '确认出库吗？');
   shipmentForm.value?.validate((valid) => {
     // 校验
     if (!valid) {
       return ElMessage.error('请填写必填项')
     }
-    if (!form.value.details?.length) {
-      return ElMessage.error('请选择商品')
-    }
-    const invalidQuantityList = form.value.details.filter(it => !it.quantity)
-    if (invalidQuantityList?.length) {
-      return ElMessage.error('请选择数量')
+    if (!form.value.recordOnly) {
+      if (!form.value.details?.length) {
+        return ElMessage.error('请选择商品')
+      }
+      const invalidQuantityList = form.value.details.filter(it => !it.quantity)
+      if (invalidQuantityList?.length) {
+        return ElMessage.error('请选择数量')
+      }
+    } else {
+      // 纯记录单不挂 SKU，商品名是这行唯一的标识
+      const rows = (form.value.details || []).filter(it => (it.itemName || '').trim())
+      if (!rows.length) {
+        return ElMessage.error('请至少填写一行商品名称')
+      }
+      if (rows.length !== form.value.details.length) {
+        return ElMessage.error('有明细没填商品名称，请补齐或删掉这一行')
+      }
     }
     submitShipment(getParamsBeforeSave(1), false)
   })
@@ -617,7 +839,9 @@ const submitShipment = (params, allowNegative) => {
   loading.value = true
   shipment({...params, allowNegative}, {skipConflictAlert: true}).then((res) => {
     if (res.code === 200) {
-      ElMessage.success(allowNegative ? '出库成功，已产生负库存，请尽快盘点补正' : '出库成功')
+      ElMessage.success(form.value.recordOnly
+        ? '已保存，这单只做记录，未影响库存'
+        : (allowNegative ? '出库成功，已产生负库存，请尽快盘点补正' : '出库成功'))
       close()
     } else {
       ElMessage.error(res.msg)
@@ -736,6 +960,17 @@ const loadDetail = (id) => {
       })
     }
     form.value = {...response.data}
+    form.value.recordOnly = !!response.data.recordOnly
+    // 迁移前的老单据没有业务日期，用录入时间那天顶上，避免日期控件空着
+    if (!form.value.bizDate) {
+      form.value.bizDate = (response.data.createTime || '').slice(0, 10) || today()
+    }
+    if (form.value.recordOnly) {
+      // 纯记录单的明细没有 id 以外的稳定标识，补个 rowKey 给 v-for 用
+      ;(form.value.details || []).forEach(it => { it.rowKey = it.id || nextRowKey() })
+      handleChangeRecordPrice()
+      return
+    }
     // 单价没有单独入库，用已保存的金额/数量还原，否则会退回规格默认售价
     restorePriceFromAmount(form.value.details)
     inventorySelectRef.value.setWarehouseId(form.value.warehouseId)
@@ -755,6 +990,8 @@ const handleChangeWarehouse = (e) => {
 const handleChangeQuantity = () => {
   let sum = 0
   form.value.details.forEach(it => {
+    // 界面上的「单价」就是要落库的销售价，同步过去免得两边对不上
+    it.salePrice = hasValue(it.price) ? Number(it.price) : undefined
     if (it.quantity) {
       sum += Number(it.quantity)
       it.amount = hasValue(it.price) ? Number((Number(it.quantity) * Number(it.price)).toFixed(2)) : undefined
@@ -790,8 +1027,13 @@ const handleDeleteDetail = (row, index) => {
   } else {
     form.value.details.splice(index, 1)
   }
+  if (form.value.recordOnly) {
+    return
+  }
   const indexOfSelected = selectedInventory.value.findIndex(it => getWarehouseAndSkuKey(it) === getWarehouseAndSkuKey(row))
-  selectedInventory.value.splice(indexOfSelected, 1)
+  if (indexOfSelected > -1) {
+    selectedInventory.value.splice(indexOfSelected, 1)
+  }
 }
 const goSaasTip = () => {
   ElMessageBox.alert('如需体验，请在公众号内回复：saas', '请去Saas版本体验', {
@@ -802,6 +1044,66 @@ const goSaasTip = () => {
 </script>
 
 <style lang="scss" scoped>
+/* 纯记录单：整张单据转黄，扫一眼就知道这单不动库存 */
+$record-only: #e6a23c;
+
+.order-info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-only-hint {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.record-only-banner {
+  /* el-form-item 的内容区是 flex，不占满一行就会和开关挤在一起 */
+  flex-basis: 100%;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-left: 3px solid $record-only;
+  border-radius: 4px;
+  background: rgba(230, 162, 60, 0.12);
+  color: #a26411;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.record-only-mode {
+  :deep(.el-card) {
+    border-color: rgba(230, 162, 60, 0.55);
+  }
+
+  :deep(.el-card__header) {
+    background: rgba(230, 162, 60, 0.14);
+    color: #a26411;
+    font-weight: 600;
+  }
+
+  :deep(.record-only-table th.el-table__cell) {
+    background: rgba(230, 162, 60, 0.14);
+    color: #a26411;
+  }
+
+  .mobile-order-hero {
+    background: linear-gradient(135deg, #f3b95f, #d98c1a);
+  }
+
+  .mobile-edit-card {
+    border-left: 3px solid $record-only;
+  }
+}
+
+.backdate-tip {
+  font-size: 12px;
+  color: #e6a23c;
+  line-height: 1.6;
+  margin-top: 2px;
+}
+
 @import "@/assets/styles/variables.module";
 
 .btn-box {

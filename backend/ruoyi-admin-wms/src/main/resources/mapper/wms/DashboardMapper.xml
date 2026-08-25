@@ -32,7 +32,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     left join wms_item_sku sku on detail.sku_id = sku.id
                     group by detail.order_id
                 ) detail_totals on detail_totals.order_id = orders.id
-                where orders.order_status = 1 and date(orders.create_time) = curdate()
+                where orders.order_status = 1 and orders.biz_date = curdate()
             ), 0) as todayTurnover,
             coalesce((
                 select sum(coalesce(orders.total_amount, detail_totals.detail_amount, 0))
@@ -45,7 +45,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     left join wms_item_sku sku on detail.sku_id = sku.id
                     group by detail.order_id
                 ) detail_totals on detail_totals.order_id = orders.id
-                where orders.order_status = 1 and date(orders.create_time) = curdate()
+                where orders.order_status = 1 and orders.biz_date = curdate()
             ), 0) as todayReceiptAmount,
             coalesce((
                 select sum(coalesce(orders.total_quantity, detail_totals.detail_quantity, 0))
@@ -55,7 +55,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     from wms_shipment_order_detail
                     group by order_id
                 ) detail_totals on detail_totals.order_id = orders.id
-                where orders.order_status = 1 and date(orders.create_time) = curdate()
+                where orders.order_status = 1 and orders.biz_date = curdate()
             ), 0) as todayShipmentQuantity,
             coalesce((
                 select sum(coalesce(orders.total_quantity, detail_totals.detail_quantity, 0))
@@ -65,10 +65,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                     from wms_receipt_order_detail
                     group by order_id
                 ) detail_totals on detail_totals.order_id = orders.id
-                where orders.order_status = 1 and date(orders.create_time) = curdate()
+                where orders.order_status = 1 and orders.biz_date = curdate()
             ), 0) as todayReceiptQuantity,
-            (select count(1) from wms_shipment_order where order_status = 1 and date(create_time) = curdate()) as todayShipmentOrders,
-            (select count(1) from wms_receipt_order where order_status = 1 and date(create_time) = curdate()) as todayReceiptOrders,
+            (select count(1) from wms_shipment_order where order_status = 1 and biz_date = curdate()) as todayShipmentOrders,
+            (select count(1) from wms_receipt_order where order_status = 1 and biz_date = curdate()) as todayReceiptOrders,
             (select count(1) from wms_shipment_order where order_status = 0) as pendingShipmentOrders,
             (select count(1) from wms_receipt_order where order_status = 0) as pendingReceiptOrders,
             coalesce((
@@ -102,7 +102,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             sum(turnover) as turnover
         from (
             select
-                date(orders.create_time) as day,
+                orders.biz_date as day,
                 count(1) as receiptOrders,
                 0 as shipmentOrders,
                 coalesce(sum(coalesce(orders.total_quantity, detail_totals.detail_quantity, 0)), 0) as receiptQuantity,
@@ -120,11 +120,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 group by detail.order_id
             ) detail_totals on detail_totals.order_id = orders.id
             where orders.order_status = 1
-              and orders.create_time &gt;= date_sub(curdate(), interval (#{days} - 1) day)
-            group by date(orders.create_time)
+              and orders.biz_date &gt;= date_sub(curdate(), interval (#{days} - 1) day)
+            group by orders.biz_date
             union all
             select
-                date(orders.create_time) as day,
+                orders.biz_date as day,
                 0 as receiptOrders,
                 count(1) as shipmentOrders,
                 0 as receiptQuantity,
@@ -142,8 +142,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 group by detail.order_id
             ) detail_totals on detail_totals.order_id = orders.id
             where orders.order_status = 1
-              and orders.create_time &gt;= date_sub(curdate(), interval (#{days} - 1) day)
-            group by date(orders.create_time)
+              and orders.biz_date &gt;= date_sub(curdate(), interval (#{days} - 1) day)
+            group by orders.biz_date
         ) daily
         group by day
         order by day
@@ -175,7 +175,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         inner join wms_item_sku sku on detail.sku_id = sku.id
         inner join wms_item item on sku.item_id = item.id
         where orders.order_status = 1
-          and orders.create_time &gt;= date_sub(curdate(), interval (#{days} - 1) day)
+          and orders.biz_date &gt;= date_sub(curdate(), interval (#{days} - 1) day)
         group by sku.id, item.item_name, sku.sku_name
         order by quantity desc
         limit #{limit}

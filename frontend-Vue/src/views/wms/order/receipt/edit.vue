@@ -28,8 +28,17 @@
               </el-form-item>
             </el-col>
             <el-col :span="6">
-              <el-form-item label="总数量" prop="totalQuantity">
-                <el-input-number style="width:100%" v-model="form.totalQuantity" :controls="false" :precision="0" :disabled="true"></el-input-number>
+              <el-form-item label="入库日期" prop="bizDate">
+                <el-date-picker
+                  style="width: 100%"
+                  v-model="form.bizDate"
+                  type="date"
+                  placeholder="默认今天"
+                  value-format="YYYY-MM-DD"
+                  :clearable="false"
+                  :disabled-date="disableFutureDate"
+                />
+                <div v-if="isBackdated" class="backdate-tip">补录：这单按 {{ form.bizDate }} 计入统计</div>
               </el-form-item>
             </el-col>
           </el-row>
@@ -79,6 +88,11 @@
                 </el-form-item>
                 <el-button link type="primary" @click="handleAutoCalc" style="line-height: 32px">自动计算</el-button>
               </div>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="总数量" prop="totalQuantity">
+                <el-input-number style="width:100%" v-model="form.totalQuantity" :controls="false" :precision="0" :disabled="true"></el-input-number>
+              </el-form-item>
             </el-col>
           </el-row>
           <el-row :gutter="24">
@@ -292,9 +306,17 @@ const loading = ref(false)
 const skuSelectRef = ref(null)
 const isMobileScreen = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
 const mobileDrawerSize = computed(() => isMobileScreen() ? '100%' : '80%')
+/** 本地当天，YYYY-MM-DD。不能用 toISOString()，那是 UTC，晚上 8 点后会差一天 */
+const today = () => {
+  const d = new Date()
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 const initFormData = {
   id: undefined,
   orderNo: undefined,
+  bizDate: today(),
   optType: "2",
   merchantId: undefined,
   bizOrderNo: undefined,
@@ -323,10 +345,17 @@ const data = reactive({
     ],
     warehouseId: [
       {required: true, message: "请选择仓库", trigger: ['blur', 'change']}
+    ],
+    bizDate: [
+      {required: true, message: "请选择入库日期", trigger: 'change'}
     ]
   }
 });
 const { form, rules} = toRefs(data);
+
+// 单据日期不能选未来
+const disableFutureDate = (date) => date.getTime() > Date.now()
+const isBackdated = computed(() => !!form.value.bizDate && form.value.bizDate !== today())
 const warehouseName = (id) => useWmsStore().warehouseMap.get(id)?.warehouseName || '请选择仓库'
 const orderTypeLabel = computed(() => proxy.selectDictLabel(wms_receipt_type.value, form.value.optType) || '入库类型')
 
@@ -422,6 +451,7 @@ const getParamsBeforeSave = (orderStatus) => {
   return {
     id: form.value.id,
     orderNo: form.value.orderNo,
+    bizDate: form.value.bizDate || today(),
     orderStatus,
     optType: form.value.optType,
     merchantId: form.value.merchantId,
@@ -566,6 +596,10 @@ const loadDetail = (id) => {
   loading.value = true
   getReceiptOrder(id).then((response) => {
     form.value = {...response.data}
+    // 迁移前的老单据没有业务日期，用录入时间那天顶上，避免日期控件空着
+    if (!form.value.bizDate) {
+      form.value.bizDate = (response.data.createTime || '').slice(0, 10) || today()
+    }
     // 单价没有单独入库，用已保存的金额/数量还原，否则会退回规格默认进价
     restorePriceFromAmount(form.value.details)
     if (response.data.details?.length) {
@@ -632,6 +666,13 @@ const goSaasTip = () => {
 </script>
 
 <style lang="scss" scoped>
+.backdate-tip {
+  font-size: 12px;
+  color: #e6a23c;
+  line-height: 1.6;
+  margin-top: 2px;
+}
+
 @import "@/assets/styles/variables.module";
 
 .btn-box {

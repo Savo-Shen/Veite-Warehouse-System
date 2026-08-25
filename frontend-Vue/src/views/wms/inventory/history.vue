@@ -54,7 +54,7 @@
             <el-form-item label="规格编号" prop="skuCode">
               <el-input v-model="queryParams.skuCode" clearable placeholder="请输入规格编号"></el-input>
             </el-form-item>
-            <el-form-item label="操作时间" prop="createTimeRange">
+            <el-form-item label="业务日期" prop="createTimeRange">
               <el-date-picker
                 v-model="queryParams.createTimeRange"
                 type="datetimerange"
@@ -129,7 +129,12 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作时间" prop="createTime"/>
+        <el-table-column label="业务日期" prop="bizDate" width="120">
+          <template #default="{ row }">
+            <div>{{ row.bizDate || String(row.createTime || '').slice(0, 10) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="录入时间" prop="createTime"/>
       </el-table>
 
       <el-row>

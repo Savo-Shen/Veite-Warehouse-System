@@ -189,6 +189,12 @@
 
 
 
+        <el-table-column label="入库日期" align="left" width="110" prop="bizDate">
+          <template #default="{ row }">
+            <div>{{ row.bizDate || parseTime(row.createTime, '{y}-{m}-{d}') }}</div>
+            <div v-if="isBackdated(row)" class="backdate-flag">补录</div>
+          </template>
+        </el-table-column>
         <el-table-column label="操作时间" align="left" width="150">
           <template #default="{ row }">
             <div>创建：{{ parseTime(row.createTime, '{mm}-{dd} {hh}:{ii}') }}</div>
@@ -248,6 +254,10 @@
           <div class="mobile-order-card__row"><span>仓库</span><span>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName || '-' }}</span></div>
           <div class="mobile-order-card__row"><span>供应商</span><span>{{ useWmsStore().merchantMap.get(row.merchantId)?.merchantName || '-' }}</span></div>
           <div class="mobile-order-card__row"><span>数量 / 金额</span><span>{{ Number(row.totalQuantity || 0).toFixed(0) }} / {{ row.totalAmount ?? '-' }}</span></div>
+          <div class="mobile-order-card__row">
+            <span>入库日期</span>
+            <span>{{ row.bizDate || parseTime(row.createTime, '{y}-{m}-{d}') }}<em v-if="isBackdated(row)" class="backdate-flag"> 补录</em></span>
+          </div>
           <div class="mobile-order-card__row"><span>创建时间</span><span>{{ parseTime(row.createTime, '{mm}-{dd} {hh}:{ii}') }}</span></div>
           <div class="mobile-order-card__actions">
             <el-button @click="handleGoDetail(row)">{{ expandedRowKeys.includes(row.id) ? '收起' : '查看' }}</el-button>
@@ -293,6 +303,12 @@ const receiptOrderList = ref([]);
 const open = ref(false);
 const buttonLoading = ref(false);
 const loading = ref(true);
+
+/** 业务日期和录入日期不是同一天，说明是事后补的单 */
+const isBackdated = (row) => {
+  if (!row.bizDate || !row.createTime) return false
+  return row.bizDate !== proxy.parseTime(row.createTime, '{y}-{m}-{d}')
+}
 const ids = ref([]);
 const total = ref(0);
 const title = ref("");
@@ -415,7 +431,7 @@ async function handlePrint(row) {
     totalQuantity: Number(receiptOrder.totalQuantity).toFixed(0),
     totalAmount: ((receiptOrder.totalAmount || receiptOrder.totalAmount === 0) ? (receiptOrder.totalAmount + '元') : ''),
     createBy: receiptOrder.createBy,
-    createTime: proxy.parseTime(receiptOrder.createTime, '{mm}-{dd} {hh}:{ii}'),
+    createTime: receiptOrder.bizDate || proxy.parseTime(receiptOrder.createTime, '{mm}-{dd} {hh}:{ii}'),
     updateBy: receiptOrder.updateBy,
     updateTime: proxy.parseTime(receiptOrder.updateTime, '{mm}-{dd} {hh}:{ii}'),
     remark: receiptOrder.remark,
@@ -493,6 +509,12 @@ onBeforeUnmount(() => {
 })
 </script>
 <style lang="scss">
+.backdate-flag {
+  font-size: 12px;
+  color: #e6a23c;
+  font-style: normal;
+}
+
 .el-statistic__content {
   font-size: 14px;
 }
