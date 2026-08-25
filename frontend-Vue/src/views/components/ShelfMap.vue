@@ -548,7 +548,8 @@ const rawScene = computed(() => {
 
     r.cells.forEach(loc => {
       const col = loc.coord.col - r.minCol
-      const layer = loc.coord.cell - r.minCell
+      // 货架编号自上而下递增：格号越小位置越高，所以最大格号排在最底层
+      const layer = r.maxCell - loc.coord.cell
       const sx = x + r.gapX + col * (r.cellW + r.gapX)
       const sy = r.gapY + layer * (r.cellH + r.gapY)
       const sz = z + Math.min(18 * r.scaleZ, r.depth * 0.22)
@@ -735,7 +736,7 @@ const topLines = (rack) => Array.from({ length: Math.max(1, rack.nCol - 1) }, (_
 const sideLineStyle = (n, rack) => ({ top: `${(n / rack.nCell) * 100}%` })
 const topLineStyle = (n, rack) => ({ left: `${(n / rack.nCol) * 100}%` })
 const rackCols = (rack) => Array.from({ length: rack.nCol }, (_, i) => rack.minCol + i)
-const rackLayers = (rack) => Array.from({ length: rack.nCell }, (_, i) => rack.maxCell - i)
+const rackLayers = (rack) => Array.from({ length: rack.nCell }, (_, i) => rack.minCell + i)
 const shelfBoards = (rack) => Array.from({ length: rack.nCell + 1 }, (_, i) => i)
 const uprights = (rack) => Array.from({ length: rack.nCol + 1 }, (_, i) => i)
 const frameStyle = (rack) => ({ width: rack.w + 'px', height: rack.h + 'px' })
@@ -752,7 +753,7 @@ const gridStyle = (rack) => ({
 })
 const slotStyle = (rack, loc) => {
   const col = loc.coord.col - rack.minCol
-  const layer = rack.maxCell - loc.coord.cell
+  const layer = loc.coord.cell - rack.minCell
   return {
     width: CELL_W + 'px',
     height: CELL_H + 'px',

@@ -29,13 +29,15 @@ export default defineConfig(({ mode, command }) => {
       open: true,
       proxy: {
         // https://cn.vitejs.dev/config/#server-proxy
+        // 后端地址默认 8080；要同时开第二个后端调试时，用环境变量指到别的端口，
+        // 例如 VITE_APP_PROXY_TARGET=http://localhost:8081 pnpm run dev
         '/dev-api': {
-          target: 'http://localhost:8080',
+          target: env.VITE_APP_PROXY_TARGET || 'http://localhost:8080',
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/dev-api/, '')
         },
         '/prod-api': {
-          target: 'http://localhost:8080',
+          target: env.VITE_APP_PROXY_TARGET || 'http://localhost:8080',
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/prod-api/, '')
         }

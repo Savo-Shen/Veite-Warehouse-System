@@ -20,3 +20,10 @@ backend/backups/
 
 # 本地 IDE / 助手配置，不入库
 .claude/
+
+# Redis 本地持久化文件（运行时产物）
+dump.rdb
+
+# Python 生成脚本的字节码缓存
+__pycache__/
+*.pyc
