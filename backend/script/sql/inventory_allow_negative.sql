@@ -8,6 +8,6 @@
 -- ----------------------------
 
 INSERT INTO `sys_config` (`config_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_by`, `create_time`, `remark`)
-SELECT 1940000000000001003, '库存-允许负库存出库', 'wms.inventory.allowNegative', 'true', 'Y', 'admin', NOW(),
+SELECT 1940000000000001004, '库存-允许负库存出库', 'wms.inventory.allowNegative', 'true', 'Y', 'admin', NOW(),
        '为 true 时，出库遇到库存不足可由操作员二次确认后扣成负库存（用于未盘库商品先出后盘）；为 false 时沿用硬拦截。移库不受此开关影响，始终不允许负库存。'
 WHERE NOT EXISTS (SELECT 1 FROM `sys_config` WHERE `config_key` = 'wms.inventory.allowNegative');

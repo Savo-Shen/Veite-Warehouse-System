@@ -243,31 +243,50 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
     public void add(List<? extends BaseOrderDetailBo> details) {
         List<Inventory> addList = new LinkedList<>();
         List<Inventory> updateList = new LinkedList<>();
+        // 同一张单里同一个规格可能出现多行，按 仓库+规格 归拢，后一行要接着前一行的结果算
+        Map<String, Inventory> touched = new LinkedHashMap<>();
+        Set<String> newKeys = new HashSet<>();
         details.forEach(orderDetailsBo -> {
-            LambdaQueryWrapper<Inventory> wrapper = Wrappers.lambdaQuery();
-            wrapper.eq(Inventory::getWarehouseId, orderDetailsBo.getWarehouseId());
-            wrapper.eq(Inventory::getSkuId, orderDetailsBo.getSkuId());
-            Inventory result = inventoryMapper.selectOne(wrapper);
-            if(result!=null){
-                BigDecimal before = result.getQuantity();
-                BigDecimal after = before.add(orderDetailsBo.getQuantity());
-                result.setQuantity(after);
-                orderDetailsBo.setAfterQuantity(after);
-                orderDetailsBo.setBeforeQuantity(before);
-                updateList.add(result);
-            }else {
-                orderDetailsBo.setBeforeQuantity(BigDecimal.ZERO);
-                orderDetailsBo.setAfterQuantity(orderDetailsBo.getQuantity());
-                Inventory inventory = MapstructUtils.convert(orderDetailsBo, Inventory.class);
-                addList.add(inventory);
+            String key = inventoryKey(orderDetailsBo.getWarehouseId(), orderDetailsBo.getSkuId());
+            Inventory result = touched.get(key);
+            if (result == null) {
+                LambdaQueryWrapper<Inventory> wrapper = Wrappers.lambdaQuery();
+                wrapper.eq(Inventory::getWarehouseId, orderDetailsBo.getWarehouseId());
+                wrapper.eq(Inventory::getSkuId, orderDetailsBo.getSkuId());
+                result = inventoryMapper.selectOne(wrapper);
+                if (result != null) {
+                    touched.put(key, result);
+                    updateList.add(result);
+                }
             }
+            BigDecimal before = result == null ? BigDecimal.ZERO : result.getQuantity();
+            BigDecimal after = before.add(orderDetailsBo.getQuantity());
+            orderDetailsBo.setBeforeQuantity(before);
+            orderDetailsBo.setAfterQuantity(after);
+            if (result == null) {
+                result = new Inventory();
+                result.setSkuId(orderDetailsBo.getSkuId());
+                result.setWarehouseId(orderDetailsBo.getWarehouseId());
+                result.setRemark(orderDetailsBo.getRemark());
+                touched.put(key, result);
+                newKeys.add(key);
+                addList.add(result);
+            }
+            result.setQuantity(after);
         });
-        if (addList.size() > 0) {
+        if (!addList.isEmpty()) {
             saveBatch(addList);
         }
-        if (updateList.size() > 0) {
+        if (!updateList.isEmpty()) {
             updateBatchById(updateList);
         }
+    }
+
+    /**
+     * 库存的业务唯一键：一个规格在一个仓库只应该有一行（wms_inventory 上有 uk_sku_warehouse 兜底）
+     */
+    private String inventoryKey(Long warehouseId, Long skuId) {
+        return warehouseId + ":" + skuId;
     }
 
     /**
@@ -291,11 +310,21 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
         List<Inventory> addList = new LinkedList<>();
         // 一次把所有缺口收集齐再抛，避免操作员改一条报一条
         List<String> shortages = new LinkedList<>();
+        // 同一张单里同一个规格可能出现多行，按 仓库+规格 归拢，后一行要接着前一行的结果扣
+        Map<String, Inventory> touched = new LinkedHashMap<>();
         details.forEach(detailBo -> {
-            LambdaQueryWrapper<Inventory> wrapper = Wrappers.lambdaQuery();
-            wrapper.eq(Inventory::getWarehouseId, detailBo.getWarehouseId());
-            wrapper.eq(Inventory::getSkuId, detailBo.getSkuId());
-            Inventory result = inventoryMapper.selectOne(wrapper);
+            String key = inventoryKey(detailBo.getWarehouseId(), detailBo.getSkuId());
+            Inventory result = touched.get(key);
+            if (result == null) {
+                LambdaQueryWrapper<Inventory> wrapper = Wrappers.lambdaQuery();
+                wrapper.eq(Inventory::getWarehouseId, detailBo.getWarehouseId());
+                wrapper.eq(Inventory::getSkuId, detailBo.getSkuId());
+                result = inventoryMapper.selectOne(wrapper);
+                if (result != null) {
+                    touched.put(key, result);
+                    updateList.add(result);
+                }
+            }
             BigDecimal beforeQuantity = result == null ? BigDecimal.ZERO : result.getQuantity();
             BigDecimal afterQuantity = beforeQuantity.subtract(detailBo.getQuantity());
             if (afterQuantity.signum() == -1 && !allowNegative) {
@@ -309,15 +338,13 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
             detailBo.setAfterQuantity(afterQuantity);
             if (result == null) {
                 // 该规格在这个仓库还没有库存记录，直接建一条负数记录，欠多少一目了然
-                Inventory inventory = new Inventory();
-                inventory.setSkuId(detailBo.getSkuId());
-                inventory.setWarehouseId(detailBo.getWarehouseId());
-                inventory.setQuantity(afterQuantity);
-                addList.add(inventory);
-            } else {
-                result.setQuantity(afterQuantity);
-                updateList.add(result);
+                result = new Inventory();
+                result.setSkuId(detailBo.getSkuId());
+                result.setWarehouseId(detailBo.getWarehouseId());
+                touched.put(key, result);
+                addList.add(result);
             }
+            result.setQuantity(afterQuantity);
         });
         if (CollUtil.isNotEmpty(shortages)) {
             throw new ServiceException("库存不足", HttpStatus.CONFLICT, String.join("\n", shortages));

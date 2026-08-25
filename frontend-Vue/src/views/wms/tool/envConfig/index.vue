@@ -53,6 +53,35 @@
           但以本页配置优先；两处都为空时，地图相关页面会显示配置指引而不会报错。
         </div>
       </div>
+
+      <!-- 库存 -->
+      <div class="config-group" style="margin-top: 28px">
+        <div class="group-title">
+          <svg-icon icon-class="shopping" class="group-icon" />
+          库存
+        </div>
+        <el-alert type="info" :closable="false" class="group-intro">
+          <p>用于「货已经发出去了，但这个规格还没盘过库」的情况。</p>
+          <ul>
+            <li>打开后：出库遇到库存不够，会先弹出提示列出差多少，操作员确认「仍然出库」才会把账面扣成负数；</li>
+            <li>关闭后：库存不够一律拦下，必须先盘库或入库才能出库（系统原本的行为）；</li>
+            <li>无论开关如何，<b>移库都不允许负库存</b>——源库位没货就是选错了；</li>
+            <li>产生的负库存会在「库存统计」页顶部提示条数，勾选「只看负库存」可以列出来，盘点后即可归零。</li>
+          </ul>
+        </el-alert>
+
+        <el-form label-width="110px" style="max-width: 720px">
+          <el-form-item label="允许负库存">
+            <el-switch v-model="inventoryForm.allowNegative" active-text="允许" inactive-text="禁止" inline-prompt />
+            <div class="field-desc">
+              当前：{{ inventoryForm.allowNegative ? '出库时库存不足可二次确认后扣成负数' : '出库时库存不足直接拦截' }}
+            </div>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="savingInventory" v-hasPermi="['system:config:edit']" @click="saveInventory">保 存</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
     </el-card>
   </div>
 </template>
@@ -77,18 +106,23 @@ const previewRef = ref(null)
 const testResult = ref('success')
 const testMessage = ref('')
 const form = reactive({ key: '', securityCode: '' })
+const inventoryForm = reactive({ allowNegative: false })
+const savingInventory = ref(false)
+const ALLOW_NEGATIVE_CONFIG = 'wms.inventory.allowNegative'
 
 let previewMap = null
 
 async function loadValues() {
   loading.value = true
   try {
-    const [keyRes, codeRes] = await Promise.all([
+    const [keyRes, codeRes, negativeRes] = await Promise.all([
       getConfigKey(AMAP_KEY_CONFIG),
-      getConfigKey(AMAP_SECURITY_CONFIG)
+      getConfigKey(AMAP_SECURITY_CONFIG),
+      getConfigKey(ALLOW_NEGATIVE_CONFIG)
     ])
     form.key = (keyRes.msg || '').trim()
     form.securityCode = (codeRes.msg || '').trim()
+    inventoryForm.allowNegative = (negativeRes.msg || '').trim() === 'true'
   } finally {
     loading.value = false
   }
@@ -109,6 +143,18 @@ async function save(silent = false) {
     return false
   } finally {
     saving.value = false
+  }
+}
+
+async function saveInventory() {
+  savingInventory.value = true
+  try {
+    await updateConfigByKey(ALLOW_NEGATIVE_CONFIG, String(inventoryForm.allowNegative))
+    ElMessage.success(inventoryForm.allowNegative
+      ? '已允许负库存出库，出库页刷新后生效'
+      : '已禁止负库存出库，出库页刷新后生效')
+  } finally {
+    savingInventory.value = false
   }
 }
 

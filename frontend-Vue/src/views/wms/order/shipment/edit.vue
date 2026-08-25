@@ -109,7 +109,10 @@
               <span>商品明细</span>
               <small class="mobile-only">已选 {{ form.details.length }} 项</small>
             </div>
-            <el-button class="mobile-only" type="primary" plain icon="Plus" @click="showAddItem" :disabled="!form.warehouseId">添加</el-button>
+            <div class="mobile-only" style="display: flex; gap: 8px">
+              <el-button type="primary" plain icon="Plus" @click="showAddItem" :disabled="!form.warehouseId">添加</el-button>
+              <el-button type="warning" plain icon="Plus" @click="showSkuSelect" :disabled="!form.warehouseId">无库存</el-button>
+            </div>
           </div>
         </template>
         <div class="receipt-order-content">
@@ -136,9 +139,14 @@
               content="请先选择仓库！"
             >
               <template #reference>
-                <el-button type="primary" plain="plain" size="default" @click="showAddItem" icon="Plus"
-                           :disabled="!form.warehouseId">添加商品
-                </el-button>
+                <div style="display: inline-flex; gap: 12px">
+                  <el-button type="primary" plain="plain" size="default" @click="showAddItem" icon="Plus"
+                             :disabled="!form.warehouseId">添加商品
+                  </el-button>
+                  <el-button type="warning" plain="plain" size="default" @click="showSkuSelect" icon="Plus"
+                             :disabled="!form.warehouseId">按商品添加（含无库存）
+                  </el-button>
+                </div>
               </template>
             </el-popover>
           </div>
@@ -281,6 +289,14 @@
           </div>
         </div>
       </el-card>
+      <SkuSelect
+        ref="skuSelectRef"
+        :model-value="skuSelectShow"
+        :selected-sku="selectedSku"
+        @handleOkClick="handleSkuOkClick"
+        @handleCancelClick="skuSelectShow = false"
+        :size="mobileDrawerSize"
+      />
       <InventorySelect
         ref="inventorySelectRef"
         :model-value="inventorySelectShow"
@@ -316,6 +332,7 @@ import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
 import {numSub, generateNo} from '@/utils/ruoyi'
 import InventorySelect from "@/views/components/InventorySelect.vue";
+import SkuSelect from "@/views/components/SkuSelect.vue";
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil"
 import {getConfigKey} from "@/api/system/config"
 
@@ -371,8 +388,42 @@ const close = () => {
   proxy?.$tab.closeOpenPage(obj);
 }
 const inventorySelectShow = ref(false)
+const skuSelectShow = ref(false)
+const skuSelectRef = ref(null)
+const selectedSku = ref([])
 
 // 选择商品 start
+/**
+ * 按商品（规格）添加，不看有没有库存。
+ * 用于「货已经发出去了，但这个规格还没盘过库」——库存列表里根本没有这一行，只能从商品里挑。
+ */
+const showSkuSelect = () => {
+  skuSelectRef.value.getList()
+  skuSelectShow.value = true
+}
+
+const handleSkuOkClick = (items) => {
+  skuSelectShow.value = false
+  selectedSku.value = [...items]
+  items.forEach(it => {
+    const key = getWarehouseAndSkuKey({skuId: it.id, warehouseId: form.value.warehouseId})
+    if (!form.value.details.find(detail => getWarehouseAndSkuKey(detail) === key)) {
+      form.value.details.push(
+        {
+          itemSku: it.itemSku,
+          item: it.item,
+          skuId: it.id,
+          price: hasValue(it.itemSku?.sellingPrice) ? Number(it.itemSku.sellingPrice) : undefined,
+          amount: undefined,
+          quantity: undefined,
+          warehouseId: form.value.warehouseId,
+          inventoryId: null,
+        })
+    }
+  })
+  loadLastPrices()
+}
+
 const showAddItem = () => {
   inventorySelectRef.value.getList()
   inventorySelectShow.value = true
