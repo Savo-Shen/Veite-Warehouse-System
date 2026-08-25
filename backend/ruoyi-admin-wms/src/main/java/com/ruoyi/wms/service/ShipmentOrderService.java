@@ -9,6 +9,7 @@ import com.ruoyi.common.core.constant.HttpStatus;
 import com.ruoyi.common.core.constant.ServiceConstants;
 import com.ruoyi.common.core.exception.ServiceException;
 import com.ruoyi.common.core.exception.base.BaseException;
+import com.ruoyi.common.core.service.ConfigService;
 import com.ruoyi.common.core.utils.MapstructUtils;
 import com.ruoyi.common.core.utils.StringUtils;
 import com.ruoyi.common.mybatis.core.page.PageQuery;
@@ -45,6 +46,12 @@ public class ShipmentOrderService {
     private final InventoryService inventoryService;
     private final InventoryHistoryService inventoryHistoryService;
     private final OrderKeywordSearcher orderKeywordSearcher;
+    private final ConfigService configService;
+
+    /**
+     * 是否允许出库扣成负库存的系统开关（基础资料 → 环境配置）
+     */
+    private static final String ALLOW_NEGATIVE_KEY = "wms.inventory.allowNegative";
 
     /**
      * 查询出库单
@@ -187,12 +194,21 @@ public class ShipmentOrderService {
             updateByBo(bo);
         }
         // 3.更新库存：Inventory表
-        inventoryService.subtract(bo.getDetails());
+        // 负库存要「系统开关打开」且「本次提交显式确认过」才放行，两者缺一不可
+        boolean allowNegative = isNegativeAllowed() && Boolean.TRUE.equals(bo.getAllowNegative());
+        inventoryService.subtract(bo.getDetails(), allowNegative);
 
         // 4.创建库存记录
         inventoryHistoryService.saveInventoryHistory(bo,ServiceConstants.InventoryHistoryOrderType.SHIPMENT,false);
     }
 
+
+    /**
+     * 系统是否允许出库扣成负库存
+     */
+    public boolean isNegativeAllowed() {
+        return Boolean.parseBoolean(configService.getConfigValue(ALLOW_NEGATIVE_KEY));
+    }
 
     private void validateBeforeShipment(ShipmentOrderBo bo) {
         if (CollUtil.isEmpty(bo.getDetails())) {

@@ -29,12 +29,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectWithStock" resultType="com.ruoyi.wms.domain.vo.HoseSpecVo">
         SELECT s.id, s.hose_code, s.bore_code, s.layer_code, s.inch, s.nickname,
                s.layer_name, s.id_mm, s.od_mm, s.work_pressure_mpa, s.bend_radius_mm,
-               s.cost_price, s.price_source, s.std_ref, s.remark,
+               sku.cost_price, s.price_source, s.std_ref, s.remark,
                IFNULL(st.total_length_m, 0) AS total_length_m,
                IFNULL(st.piece_count, 0)    AS piece_count,
                IFNULL(st.max_length_m, 0)   AS max_length_m,
                st.piece_text, st.location_names
           FROM wms_hose_spec s
+          LEFT JOIN wms_item_sku sku ON sku.id = s.sku_id
         <include refid="stockJoin"/>
         <where>
             <if test="keyword != null and keyword != ''">
@@ -53,12 +54,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectOneWithStock" resultType="com.ruoyi.wms.domain.vo.HoseSpecVo">
         SELECT s.id, s.hose_code, s.bore_code, s.layer_code, s.inch, s.nickname,
                s.layer_name, s.id_mm, s.od_mm, s.work_pressure_mpa, s.bend_radius_mm,
-               s.cost_price, s.price_source, s.std_ref, s.remark,
+               sku.cost_price, s.price_source, s.std_ref, s.remark,
                IFNULL(st.total_length_m, 0) AS total_length_m,
                IFNULL(st.piece_count, 0)    AS piece_count,
                IFNULL(st.max_length_m, 0)   AS max_length_m,
                st.piece_text, st.location_names
           FROM wms_hose_spec s
+          LEFT JOIN wms_item_sku sku ON sku.id = s.sku_id
         <include refid="stockJoin"/>
          WHERE s.hose_code = #{hoseCode}
     </select>

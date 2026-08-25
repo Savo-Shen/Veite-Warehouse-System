@@ -9,13 +9,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
       取 MIN(layer_code) 那行即可），省得再建一张通径字典表。
     -->
     <sql id="ferruleCols">
-        r.id, r.ferrule_sku, r.ferrule_name, r.layer_scope, r.bore_code, r.skin_type,
-        r.qty, r.location_id, l.location_code, l.location_name,
-        r.cost_price, r.remark, s.nickname, s.inch
+        r.id, r.sku_id, r.ferrule_sku, r.ferrule_name, r.layer_scope, r.bore_code, r.skin_type,
+        inv.quantity AS qty, sku.item_location_id AS location_id,
+        l.location_code, l.location_name, sku.cost_price,
+        r.remark, s.nickname, s.inch
     </sql>
 
     <sql id="boreJoin">
-        LEFT JOIN wms_location l ON l.id = r.location_id
+        LEFT JOIN wms_item_sku  sku ON sku.id = r.sku_id
+        LEFT JOIN wms_inventory inv ON inv.sku_id = r.sku_id
+        LEFT JOIN wms_location  l   ON l.id = sku.item_location_id
         LEFT JOIN (
             SELECT bore_code, MIN(nickname) AS nickname, MIN(inch) AS inch
               FROM wms_hose_spec GROUP BY bore_code

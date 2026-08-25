@@ -26,6 +26,14 @@ export function listInventoryBoard(query,type) {
   })
 }
 
+// 统计负库存条数（出库欠账、待盘点补正）
+export function getNegativeCount() {
+  return request({
+    url: '/wms/inventory/negativeCount',
+    method: 'get'
+  })
+}
+
 // 查询库存详细
 export function getInventory(id) {
   return request({

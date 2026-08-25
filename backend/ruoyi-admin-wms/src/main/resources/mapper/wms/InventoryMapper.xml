@@ -44,6 +44,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 or (bo.warehouseId != null)
                 or (bo.minQuantity != null)
                 or (bo.maxQuantity != null)
+                or (bo.negativeOnly != null and bo.negativeOnly)
                 or (bo.tagId != null)
                 or (bo.itemLocationId != null)">
                 <if test="bo.itemName != null and bo.itemName != ''">
@@ -75,6 +76,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 </if>
                 <if test="bo.maxQuantity != null">
                     and inventory.quantity &lt;= #{bo.maxQuantity}
+                </if>
+                <if test="bo.negativeOnly != null and bo.negativeOnly">
+                    and inventory.quantity &lt; 0
                 </if>
                 <if test="bo.tagId != null">
                     and exists (

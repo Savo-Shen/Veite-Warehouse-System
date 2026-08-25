@@ -33,6 +33,9 @@ public class HoseFitting extends BaseEntity {
     @TableId(value = "id")
     private Long id;
 
+    /** 关联 wms_item_sku.id。库存/库位/进价都在主商品体系里，本表只存业务属性 */
+    private Long skuId;
+
     private String fittingSku;
 
     /** 现场叫法，跟手写标签一字不差 */
@@ -60,15 +63,9 @@ public class HoseFitting extends BaseEntity {
 
     private Integer seenOnSheet;
 
-    /** NULL = 还没盘；0 = 盘过确认没有。两者含义不同，页面上要显示成不一样的东西 */
-    private Integer qty;
 
-    private Long locationId;
 
-    /** 元/个 */
-    private BigDecimal costPrice;
 
-    private String brand;
 
     /** 厂家代号（20111 这类五位码），各厂不一致，按实物填 */
     private String vendorCode;

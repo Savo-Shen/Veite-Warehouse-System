@@ -62,24 +62,6 @@ export function quoteHose(data) {
   })
 }
 
-// 接头盘点回填
-export function saveHoseFittingStock(list) {
-  return request({
-    url: '/wms/hose/fitting/stock',
-    method: 'put',
-    data: list
-  })
-}
-
-// 外套盘点回填
-export function saveHoseFerruleStock(list) {
-  return request({
-    url: '/wms/hose/ferrule/stock',
-    method: 'put',
-    data: list
-  })
-}
-
 // 扣压参数回填
 export function saveHoseCrimp(list) {
   return request({

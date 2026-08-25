@@ -9,7 +9,6 @@ import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.common.web.core.BaseController;
 import com.ruoyi.wms.domain.bo.HoseFittingBo;
 import com.ruoyi.wms.domain.bo.HoseQuoteBo;
-import com.ruoyi.wms.domain.bo.HoseStockBo;
 import com.ruoyi.wms.domain.entity.HoseCrimp;
 import com.ruoyi.wms.domain.entity.HosePiece;
 import com.ruoyi.wms.domain.vo.HoseCrimpVo;
@@ -106,25 +105,12 @@ public class HoseController extends BaseController {
         return R.ok(hoseService.quote(bo));
     }
 
-    /**
-     * 接头盘点回填（库存/库位/成本价）
+    /*
+     * 接头/外套的库存、库位、进价不在这里改了。
+     * 它们现在是普通商品 SKU，进货走入库单、卖出走出库单、盘点走盘点单，
+     * 改库位和进价去「基础资料 → 商品管理」。
+     * 这样才有出入库留痕，也才能单卖接头。
      */
-    @SaCheckPermission("wms:hose:edit")
-    @Log(title = "压油管-接头盘点", businessType = BusinessType.UPDATE)
-    @PutMapping("/fitting/stock")
-    public R<Integer> saveFittingStock(@Validated @RequestBody List<HoseStockBo> list) {
-        return R.ok(hoseService.saveFittingStock(list));
-    }
-
-    /**
-     * 外套盘点回填
-     */
-    @SaCheckPermission("wms:hose:edit")
-    @Log(title = "压油管-外套盘点", businessType = BusinessType.UPDATE)
-    @PutMapping("/ferrule/stock")
-    public R<Integer> saveFerruleStock(@Validated @RequestBody List<HoseStockBo> list) {
-        return R.ok(hoseService.saveFerruleStock(list));
-    }
 
     /**
      * 扣压参数回填（现场实测后填）

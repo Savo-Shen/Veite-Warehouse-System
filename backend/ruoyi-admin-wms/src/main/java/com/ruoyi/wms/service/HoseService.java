@@ -8,10 +8,7 @@ import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.wms.domain.bo.HoseFittingBo;
 import com.ruoyi.wms.domain.bo.HoseQuoteBo;
-import com.ruoyi.wms.domain.bo.HoseStockBo;
 import com.ruoyi.wms.domain.entity.HoseCrimp;
-import com.ruoyi.wms.domain.entity.HoseFerrule;
-import com.ruoyi.wms.domain.entity.HoseFitting;
 import com.ruoyi.wms.domain.entity.HosePiece;
 import com.ruoyi.wms.domain.vo.*;
 import com.ruoyi.wms.mapper.*;
@@ -448,44 +445,12 @@ public class HoseService {
     }
 
     // ============================================================
-    // 盘点回填
+    // 扣压参数回填
+    //
+    // 这不是库存，是机器设置（模具号/扣压直径/剥胶长度/插入深度/压机能不能压），
+    // 只能现场实测，所以留在本页面直接改。
     // ============================================================
 
-    /** 接头库存/库位/成本价批量回填 */
-    @Transactional(rollbackFor = Exception.class)
-    public int saveFittingStock(List<HoseStockBo> list) {
-        int n = 0;
-        for (HoseStockBo bo : list) {
-            HoseFitting u = new HoseFitting();
-            u.setId(bo.getId());
-            u.setQty(bo.getQty());
-            u.setLocationId(bo.getLocationId());
-            u.setCostPrice(bo.getCostPrice());
-            u.setBrand(bo.getBrand());
-            u.setVendorCode(bo.getVendorCode());
-            u.setRemark(bo.getRemark());
-            n += hoseFittingMapper.updateById(u);
-        }
-        return n;
-    }
-
-    /** 外套库存/库位/成本价批量回填 */
-    @Transactional(rollbackFor = Exception.class)
-    public int saveFerruleStock(List<HoseStockBo> list) {
-        int n = 0;
-        for (HoseStockBo bo : list) {
-            HoseFerrule u = new HoseFerrule();
-            u.setId(bo.getId());
-            u.setQty(bo.getQty());
-            u.setLocationId(bo.getLocationId());
-            u.setCostPrice(bo.getCostPrice());
-            u.setRemark(bo.getRemark());
-            n += hoseFerruleMapper.updateById(u);
-        }
-        return n;
-    }
-
-    /** 扣压参数回填（现场实测后填） */
     @Transactional(rollbackFor = Exception.class)
     public int saveCrimp(List<HoseCrimp> list) {
         int n = 0;
@@ -496,9 +461,26 @@ public class HoseService {
     }
 
     // ============================================================
-    // 胶管分段增删改 —— 切了一段就要改，不然下次查出来的是旧长度
+    // 胶管分段增删改
+    //
+    // 分段表和 wms_inventory.quantity 必须同增同减：quantity 是「一共多少米」，
+    // 分段表是「这些米怎么分布」。只改一边，配料查询就会拿旧数判断。
+    // 所以下面每个写方法都在同一个事务里动两张表。
     // ============================================================
 
+    /** 把某个 SKU 的库存数量重算成分段之和。分段是唯一事实来源 */
+    private void syncInventory(Long skuId) {
+        if (skuId == null) {
+            return;
+        }
+        BigDecimal total = hosePieceMapper.sumInStock(skuId);
+        BigDecimal v = total == null ? BigDecimal.ZERO : total;
+        if (hosePieceMapper.updateInventoryQty(skuId, v) == 0) {
+            hosePieceMapper.insertInventory(skuId, v);
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public void addPiece(HosePiece piece) {
         if (StrUtil.isBlank(piece.getHoseCode())) {
             throw new ServiceException("请选择胶管规格");
@@ -507,14 +489,25 @@ public class HoseService {
             throw new ServiceException("长度要大于 0");
         }
         piece.setStatus(StrUtil.blankToDefault(piece.getStatus(), "在库"));
+        HoseSpecVo spec = hoseSpecMapper.selectOneWithStock(piece.getHoseCode());
+        if (spec == null) {
+            throw new ServiceException("没有这个胶管规格：" + piece.getHoseCode());
+        }
+        piece.setSkuId(spec.getSkuId());
         hosePieceMapper.insert(piece);
+        syncInventory(piece.getSkuId());
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updatePiece(HosePiece piece) {
         if (piece.getId() == null) {
             throw new ServiceException("主键不能为空");
         }
         hosePieceMapper.updateById(piece);
+        HosePiece after = hosePieceMapper.selectById(piece.getId());
+        if (after != null) {
+            syncInventory(after.getSkuId());
+        }
     }
 
     /**
@@ -542,9 +535,15 @@ public class HoseService {
             u.setStatus("已用完");
         }
         hosePieceMapper.updateById(u);
+        syncInventory(p.getSkuId());
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void deletePiece(Long id) {
+        HosePiece p = hosePieceMapper.selectById(id);
         hosePieceMapper.deleteById(id);
+        if (p != null) {
+            syncInventory(p.getSkuId());
+        }
     }
 }

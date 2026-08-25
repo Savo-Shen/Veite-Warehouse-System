@@ -57,6 +57,17 @@ public class InventoryController extends BaseController {
     }
 
     /**
+     * 统计负库存条数
+     * <p>
+     * 负库存是「货已出、账未盘」留下的欠账，页面用它提示还有多少条待盘点补正。
+     */
+    @SaCheckPermission("wms:inventory:all")
+    @GetMapping("/negativeCount")
+    public R<Long> negativeCount() {
+        return R.ok(inventoryService.countNegative());
+    }
+
+    /**
      * 查询库存列表商品维度
      */
     @SaCheckPermission("wms:inventory:all")

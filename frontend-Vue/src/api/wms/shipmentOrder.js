@@ -36,11 +36,13 @@ export function updateShipmentOrder(data) {
 }
 
 // 出库
-export function shipment(data) {
+// options 可传 { skipConflictAlert: true }，让「库存不足」等 409 交给页面自己处理
+export function shipment(data, options = {}) {
   return request({
     url: '/wms/shipmentOrder/shipment',
     method: 'put',
-    data: data
+    data: data,
+    ...options
   })
 }
 

@@ -84,6 +84,13 @@
       <div class="mb8 flex-space-between">
         <div style="font-size: large; display: flex; align-items: center;">
           <span>库存统计</span>
+          <el-tag
+            v-if="negativeCount > 0"
+            type="danger"
+            effect="dark"
+            class="negative-hint"
+            @click="showNegativeOnly"
+          >负库存 {{ negativeCount }} 条待盘点</el-tag>
           <el-button
             type="text"
             :icon="showCostPrice ? 'StarFilled' : 'Star'"
@@ -104,7 +111,8 @@
           <el-button v-if="hasSearchCondition" type="warning" plain icon="Download" @click="handleExportAllSearch">
             导出所有搜索结果（{{ total }} 条）
           </el-button>
-          <el-checkbox v-model="filterable" label="过滤掉库存为0的商品" size="large" @change="handleChangeFilterZero"/>
+          <el-checkbox v-model="filterable" label="过滤掉库存为0的商品" size="large" :disabled="!!queryParams.negativeOnly" @change="handleChangeFilterZero"/>
+          <el-checkbox v-model="queryParams.negativeOnly" label="只看负库存" size="large" @change="handleChangeNegativeOnly"/>
         </div>
       </div>
       <el-table :data="inventoryList" border stripe :span-method="spanMethod"
@@ -188,6 +196,7 @@
           <template #default="{ row }">
             <el-tag
               class="inventory-tag"
+              :class="{ 'negative-quantity': row.quantity < 0 }"
               :type="row.quantity == 0 
                         ? 'info' 
                         : row.quantity <= 5 
@@ -197,8 +206,9 @@
                             : 'success'"
               effect="dark"
             >
-              {{ Math.floor(row.quantity) }}
+              {{ formatQuantity(row.quantity) }}
             </el-tag>
+            <div v-if="row.quantity < 0" class="negative-note">待盘点补正</div>
           </template>
         </el-table-column>
         <el-table-column label="仓库" prop="skuIdAndWarehouseId" align="right" min-width="100%">
@@ -219,7 +229,8 @@
 
 <script setup name="Inventory">
 import {
-  listInventoryBoard
+  listInventoryBoard,
+  getNegativeCount
 } from '@/api/wms/inventory';
 import {computed, getCurrentInstance, onMounted, onBeforeUnmount, ref} from 'vue';
 import {ElForm, ElMessage, ElMessageBox} from 'element-plus';
@@ -269,6 +280,7 @@ const queryParams = ref({
   minQuantity: undefined,
   maxQuantity: undefined, // 库存上限（缺货/低库存预警）
   tagId: undefined,       // 标签筛选
+  negativeOnly: false,    // 只看负库存（出库时欠下、等待盘点补正的记录）
   sortMode: '',           // 排序方式：''默认 / quantityAsc / quantityDesc
   itemKeywords: undefined, // 新增关键字搜索
 })
@@ -288,12 +300,14 @@ const detectSearchCondition = (params, filterZero) => {
     || Boolean(params.itemLocationId)
     || Boolean(params.tagId)
     || params.maxQuantity != null
+    || Boolean(params.negativeOnly)
 }
 
 /** 查询库存列表 */
 const getList = async () => {
   let query = {...queryParams.value}
-  if (filterable.value) {
+  // 只看负库存时不能再套用「库存 >= 1」，两个条件是互斥的
+  if (filterable.value && !query.negativeOnly) {
     query.minQuantity = 1
   } else {
     query.minQuantity = undefined
@@ -320,7 +334,7 @@ const handleSelectionChange = (rows) => {
 
 const buildExportQuery = (params = queryParams.value, filterZero = filterable.value) => {
   const query = { ...params }
-  query.minQuantity = filterZero ? 1 : undefined
+  query.minQuantity = (filterZero && !query.negativeOnly) ? 1 : undefined
   // 导出无需分页
   delete query.pageNum
   delete query.pageSize
@@ -378,6 +392,7 @@ const resetQuery = () => {
   queryParams.value.maxQuantity = undefined;
   queryParams.value.tagId = undefined;
   queryParams.value.sortMode = '';
+  queryParams.value.negativeOnly = false;
   searchedCondition.value = null;
   handleQuery();
 }
@@ -399,6 +414,30 @@ const handleSortTypeChange = (e) => {
   queryParams.value.pageNum = 1;
   searchedCondition.value = null;
   getList()
+}
+
+/** 只看负库存：与「过滤掉库存为0」互斥 */
+const handleChangeNegativeOnly = () => {
+  if (queryParams.value.negativeOnly) {
+    filterable.value = false
+  }
+  handleQuery()
+}
+
+/** 点击顶部提示直接筛出负库存 */
+const showNegativeOnly = () => {
+  queryParams.value.negativeOnly = true
+  filterable.value = false
+  handleQuery()
+}
+
+/** 负数按原值展示（Math.floor 会把 -2.5 变成 -3） */
+const formatQuantity = (quantity) => {
+  const num = Number(quantity)
+  if (!Number.isFinite(num)) {
+    return quantity
+  }
+  return num < 0 ? Number(num.toFixed(2)) : Math.floor(num)
 }
 
 const handleChangeFilterZero = (e) => {
@@ -429,8 +468,17 @@ const handleKeydown = (e) => {
   }
 }
 
+const negativeCount = ref(0)
+const loadNegativeCount = async () => {
+  try {
+    const res = await getNegativeCount()
+    negativeCount.value = Number(res.data || 0)
+  } catch (e) { /* 提示用，失败不打扰 */ }
+}
+
 onMounted(() => {
   getList();
+  loadNegativeCount();
   window.addEventListener('keydown', handleKeydown)
 })
 
@@ -444,6 +492,19 @@ onBeforeUnmount(() => {
 }
 .el-table .vertical-top-cell {
   vertical-align: top
+}
+.negative-hint {
+  margin-left: 10px;
+  cursor: pointer;
+}
+.negative-quantity {
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #f56c6c;
+}
+.negative-note {
+  font-size: 12px;
+  color: #f56c6c;
+  margin-top: 2px;
 }
 .inventory-tag {
   font-size: 20px;

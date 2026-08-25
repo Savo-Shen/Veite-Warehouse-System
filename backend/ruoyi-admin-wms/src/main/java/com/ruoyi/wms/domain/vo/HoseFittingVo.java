@@ -21,6 +21,9 @@ public class HoseFittingVo extends BaseVo {
     private static final long serialVersionUID = 1L;
 
     private Long id;
+
+    /** 关联 wms_item_sku.id */
+    private Long skuId;
     private String fittingSku;
     private String fieldName;
     private String threadSystem;
@@ -43,4 +46,5 @@ public class HoseFittingVo extends BaseVo {
     private String brand;
     private String vendorCode;
     private String remark;
+    private java.math.BigDecimal sellingPrice;
 }

@@ -271,31 +271,73 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
     }
 
     /**
-     * 扣减库存
-     * @param details
+     * 扣减库存（不允许出现负库存）
      */
     @Transactional
     public void subtract(List<? extends BaseOrderDetailBo> details) {
+        subtract(details, false);
+    }
+
+    /**
+     * 扣减库存
+     *
+     * @param details       出库明细
+     * @param allowNegative 是否允许扣成负库存。用于「货已经发出去了，但这个规格还没盘过库」的场景：
+     *                      先把账扣成负数留痕，事后盘点再补正。移库不允许，源库位没货就是真的错了。
+     */
+    @Transactional
+    public void subtract(List<? extends BaseOrderDetailBo> details, boolean allowNegative) {
         List<Inventory> updateList = new LinkedList<>();
-        details.forEach(shipmentOrderDetailBo -> {
+        List<Inventory> addList = new LinkedList<>();
+        // 一次把所有缺口收集齐再抛，避免操作员改一条报一条
+        List<String> shortages = new LinkedList<>();
+        details.forEach(detailBo -> {
             LambdaQueryWrapper<Inventory> wrapper = Wrappers.lambdaQuery();
-            wrapper.eq(Inventory::getWarehouseId, shipmentOrderDetailBo.getWarehouseId());
-            wrapper.eq(Inventory::getSkuId, shipmentOrderDetailBo.getSkuId());
+            wrapper.eq(Inventory::getWarehouseId, detailBo.getWarehouseId());
+            wrapper.eq(Inventory::getSkuId, detailBo.getSkuId());
             Inventory result = inventoryMapper.selectOne(wrapper);
-            if(result==null){
-                throw new ServiceException("库存不足", HttpStatus.CONFLICT, skuLabel(shipmentOrderDetailBo.getSkuId())+"库存不足，当前库存：0");
+            BigDecimal beforeQuantity = result == null ? BigDecimal.ZERO : result.getQuantity();
+            BigDecimal afterQuantity = beforeQuantity.subtract(detailBo.getQuantity());
+            if (afterQuantity.signum() == -1 && !allowNegative) {
+                shortages.add(skuLabel(detailBo.getSkuId())
+                    + "：当前库存 " + plain(beforeQuantity)
+                    + "，本次出库 " + plain(detailBo.getQuantity())
+                    + "，缺 " + plain(afterQuantity.negate()));
+                return;
             }
-            BigDecimal beforeQuantity = result.getQuantity();
-            BigDecimal afterQuantity = beforeQuantity.subtract(shipmentOrderDetailBo.getQuantity());
-            if(afterQuantity.signum() == -1){
-                throw new ServiceException("库存不足", HttpStatus.CONFLICT, skuLabel(shipmentOrderDetailBo.getSkuId())+"库存不足，当前库存："+ beforeQuantity);
+            detailBo.setBeforeQuantity(beforeQuantity);
+            detailBo.setAfterQuantity(afterQuantity);
+            if (result == null) {
+                // 该规格在这个仓库还没有库存记录，直接建一条负数记录，欠多少一目了然
+                Inventory inventory = new Inventory();
+                inventory.setSkuId(detailBo.getSkuId());
+                inventory.setWarehouseId(detailBo.getWarehouseId());
+                inventory.setQuantity(afterQuantity);
+                addList.add(inventory);
+            } else {
+                result.setQuantity(afterQuantity);
+                updateList.add(result);
             }
-            shipmentOrderDetailBo.setBeforeQuantity(beforeQuantity);
-            shipmentOrderDetailBo.setAfterQuantity(afterQuantity);
-            result.setQuantity(afterQuantity);
-            updateList.add(result);
         });
-        updateBatchById(updateList);
+        if (CollUtil.isNotEmpty(shortages)) {
+            throw new ServiceException("库存不足", HttpStatus.CONFLICT, String.join("\n", shortages));
+        }
+        if (CollUtil.isNotEmpty(addList)) {
+            saveBatch(addList);
+        }
+        if (CollUtil.isNotEmpty(updateList)) {
+            updateBatchById(updateList);
+        }
+    }
+
+    /**
+     * 去掉 BigDecimal 尾部多余的 0，避免提示里出现「当前库存 3.000」
+     */
+    private String plain(BigDecimal value) {
+        if (value == null) {
+            return "0";
+        }
+        return value.stripTrailingZeros().toPlainString();
     }
 
     /**
@@ -307,6 +349,15 @@ public class InventoryService extends ServiceImpl<InventoryMapper, Inventory> {
             return "规格[" + skuId + "]";
         }
         return itemSkuMapVo.getItem().getItemName() + "（" + itemSkuMapVo.getItemSku().getSkuName() + "）";
+    }
+
+    /**
+     * 负库存条数（待盘点补正的欠账）
+     */
+    public long countNegative() {
+        LambdaQueryWrapper<Inventory> lqw = Wrappers.lambdaQuery();
+        lqw.lt(Inventory::getQuantity, BigDecimal.ZERO);
+        return inventoryMapper.selectCount(lqw);
     }
 
     public boolean existsByWarehouseId(Long warehouseId) {

@@ -348,13 +348,10 @@
             <el-checkbox v-model="fittingQuery.onlySeen">只看纸上有的</el-checkbox>
             <el-checkbox v-model="fittingQuery.onlyInStock">只看有货的</el-checkbox>
             <el-button type="primary" icon="Search" @click="loadFittings">查询</el-button>
-            <el-button type="success" plain icon="Check" :disabled="!fittingDirty"
-                       v-hasPermi="['wms:hose:edit']" @click="saveFittings">
-              保存改动{{ fittingDirty ? `（${fittingDirty}）` : '' }}
-            </el-button>
+            <el-button link type="primary" icon="Link" @click="goItem">去商品管理</el-button>
           </div>
           <el-alert type="info" :closable="false" show-icon style="margin-bottom:8px"
-                    title="库存留空 = 还没盘过；填 0 = 盘过、确认没有。这两个不一样，别拿 0 当空用。" />
+                    title="接头现在是普通商品：进货走入库单、卖出走出库单、盘点走盘点单，改库位和进价去商品管理。本页只读。空白 = 还没盘过，跟 0（盘过确认没有）不是一回事。" />
           <el-table v-loading="fittingLoading" :data="fittingList" size="small" border>
             <el-table-column label="现场叫法" prop="fieldName" min-width="150" />
             <el-table-column label="SKU" prop="fittingSku" min-width="140" />
@@ -365,24 +362,22 @@
               </template>
             </el-table-column>
             <el-table-column label="可配管通径(参考)" prop="boreHint" min-width="180" />
-            <el-table-column label="库存" width="110" align="center">
+            <el-table-column label="库存" width="90" align="right">
               <template #default="{ row }">
-                <el-input-number v-model="row.qty" :min="0" :controls="false" size="small"
-                                 placeholder="未盘" style="width:88px" />
+                <span v-if="row.qty == null" class="opt-none">未盘</span>
+                <span v-else :class="row.qty > 0 ? 'opt-ok' : 'opt-short'">{{ Number(row.qty) }} 个</span>
               </template>
             </el-table-column>
-            <el-table-column label="库位" width="180">
+            <el-table-column label="库位" min-width="150">
               <template #default="{ row }">
-                <el-select v-model="row.locationId" filterable clearable placeholder="选库位" size="small">
-                  <el-option v-for="l in locationList" :key="l.id"
-                             :label="`${l.locationCode} ${l.locationName || ''}`" :value="l.id" />
-                </el-select>
+                <span v-if="row.locationCode">{{ row.locationCode }} {{ row.locationName }}</span>
+                <span v-else class="opt-none">未设</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="showCost" label="进价" width="110" align="center">
+            <el-table-column v-if="showCost" label="进价" width="100" align="right">
               <template #default="{ row }">
-                <el-input-number v-model="row.costPrice" :min="0" :precision="2" :controls="false"
-                                 size="small" placeholder="元/个" style="width:88px" />
+                <span v-if="row.costPrice != null">{{ row.costPrice }}</span>
+                <span v-else class="no-price">—</span>
               </template>
             </el-table-column>
             <el-table-column label="纸上" width="60" align="center">
@@ -402,35 +397,30 @@
             <el-input v-model="ferruleKeyword" placeholder="搜 F12 / 四分" clearable
                       style="width:200px" @keyup.enter="loadFerrules" @clear="loadFerrules" />
             <el-button icon="Search" @click="loadFerrules">查询</el-button>
-            <el-button type="success" plain icon="Check" :disabled="!ferruleDirty"
-                       v-hasPermi="['wms:hose:edit']" @click="saveFerrules">
-              保存改动{{ ferruleDirty ? `（${ferruleDirty}）` : '' }}
-            </el-button>
-            <span class="bar-tip">三层管外径跟一二层不同，外套不通用，所以三层单独一档。</span>
+            <el-button link type="primary" icon="Link" @click="goItem">去商品管理</el-button>
+            <span class="bar-tip">三层管外径跟一二层不同，外套不通用，所以三层单独一档。库存与进价同样只读。</span>
           </div>
           <el-table v-loading="ferruleLoading" :data="ferruleList" size="small" border>
             <el-table-column label="SKU" prop="ferruleSku" width="150" />
             <el-table-column label="名称" prop="ferruleName" min-width="220" />
             <el-table-column label="适用层数" prop="layerScope" width="100" />
             <el-table-column label="剥皮" prop="skinType" width="80" />
-            <el-table-column label="库存" width="110" align="center">
+            <el-table-column label="库存" width="90" align="right">
               <template #default="{ row }">
-                <el-input-number v-model="row.qty" :min="0" :controls="false" size="small"
-                                 placeholder="未盘" style="width:88px" />
+                <span v-if="row.qty == null" class="opt-none">未盘</span>
+                <span v-else :class="row.qty > 0 ? 'opt-ok' : 'opt-short'">{{ Number(row.qty) }} 个</span>
               </template>
             </el-table-column>
-            <el-table-column label="库位" width="180">
+            <el-table-column label="库位" min-width="150">
               <template #default="{ row }">
-                <el-select v-model="row.locationId" filterable clearable placeholder="选库位" size="small">
-                  <el-option v-for="l in locationList" :key="l.id"
-                             :label="`${l.locationCode} ${l.locationName || ''}`" :value="l.id" />
-                </el-select>
+                <span v-if="row.locationCode">{{ row.locationCode }} {{ row.locationName }}</span>
+                <span v-else class="opt-none">未设</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="showCost" label="进价" width="110" align="center">
+            <el-table-column v-if="showCost" label="进价" width="100" align="right">
               <template #default="{ row }">
-                <el-input-number v-model="row.costPrice" :min="0" :precision="2" :controls="false"
-                                 size="small" placeholder="元/个" style="width:88px" />
+                <span v-if="row.costPrice != null">{{ row.costPrice }}</span>
+                <span v-else class="no-price">—</span>
               </template>
             </el-table-column>
           </el-table>
@@ -547,13 +537,19 @@
 import { Van, Star, StarFilled } from '@element-plus/icons-vue'
 import {
   listHoseSpec, listHosePiece, listHoseFitting, optionsHoseFitting,
-  listHoseFerrule, listHoseCrimp, quoteHose,
-  saveHoseFittingStock, saveHoseFerruleStock, saveHoseCrimp,
+  listHoseFerrule, listHoseCrimp, quoteHose, saveHoseCrimp,
   addHosePiece, cutHosePiece, delHosePiece
 } from '@/api/wms/hose'
 import { listLocationNoPage } from '@/api/wms/location'
+import { useRouter } from 'vue-router'
 
 const { proxy } = getCurrentInstance()
+const router = useRouter()
+
+/** 接头/外套现在是普通商品，改库位和进价去商品管理 */
+function goItem() {
+  router.push({ path: '/basic/item' })
+}
 
 /* ---------------- 公共 ---------------- */
 
@@ -740,41 +736,18 @@ function refreshHoseTab() {
 const fittingLoading = ref(false)
 const fittingList = ref([])
 const fittingTotal = ref(0)
-const fittingSnapshot = ref(new Map())
 const fittingQuery = reactive({
   pageNum: 1, pageSize: 20, keyword: '',
   threadSystem: undefined, seatType: undefined, gender: undefined, angle: undefined,
   onlySeen: false, onlyInStock: false
 })
 
-/** 可编辑字段的指纹，用来只提交改过的行 */
-function stockKey(r) {
-  return [r.qty, r.locationId, r.costPrice, r.brand, r.vendorCode, r.remark]
-    .map(v => v ?? '').join('|')
-}
-
-const fittingDirty = computed(() =>
-  fittingList.value.filter(r => fittingSnapshot.value.get(r.id) !== stockKey(r)).length)
-
 function loadFittings() {
   fittingLoading.value = true
   listHoseFitting(fittingQuery).then(res => {
     fittingList.value = res.rows || []
     fittingTotal.value = res.total || 0
-    fittingSnapshot.value = new Map(fittingList.value.map(r => [r.id, stockKey(r)]))
   }).finally(() => { fittingLoading.value = false })
-}
-
-function saveFittings() {
-  const changed = fittingList.value.filter(r => fittingSnapshot.value.get(r.id) !== stockKey(r))
-  if (!changed.length) return
-  saveHoseFittingStock(changed.map(r => ({
-    id: r.id, qty: r.qty, locationId: r.locationId, costPrice: r.costPrice,
-    brand: r.brand, vendorCode: r.vendorCode, remark: r.remark
-  }))).then(() => {
-    proxy.$modal.msgSuccess(`已保存 ${changed.length} 条`)
-    loadFittings()
-  })
 }
 
 /* ---------------- 外套 ---------------- */
@@ -782,28 +755,12 @@ function saveFittings() {
 const ferruleLoading = ref(false)
 const ferruleList = ref([])
 const ferruleKeyword = ref('')
-const ferruleSnapshot = ref(new Map())
-
-const ferruleDirty = computed(() =>
-  ferruleList.value.filter(r => ferruleSnapshot.value.get(r.id) !== stockKey(r)).length)
 
 function loadFerrules() {
   ferruleLoading.value = true
   listHoseFerrule({ keyword: ferruleKeyword.value }).then(res => {
     ferruleList.value = res.data || []
-    ferruleSnapshot.value = new Map(ferruleList.value.map(r => [r.id, stockKey(r)]))
   }).finally(() => { ferruleLoading.value = false })
-}
-
-function saveFerrules() {
-  const changed = ferruleList.value.filter(r => ferruleSnapshot.value.get(r.id) !== stockKey(r))
-  if (!changed.length) return
-  saveHoseFerruleStock(changed.map(r => ({
-    id: r.id, qty: r.qty, locationId: r.locationId, costPrice: r.costPrice, remark: r.remark
-  }))).then(() => {
-    proxy.$modal.msgSuccess(`已保存 ${changed.length} 条`)
-    loadFerrules()
-  })
 }
 
 /* ---------------- 扣压参数 ---------------- */

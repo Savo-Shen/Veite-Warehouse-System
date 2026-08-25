@@ -81,6 +81,11 @@ public class InventoryBo extends BaseEntity {
     private Long tagId;
 
     /**
+     * 只看负库存（欠账待盘点的记录）
+     */
+    private Boolean negativeOnly;
+
+    /**
      * 排序方式：默认为空（按商品/仓库分组）；quantityAsc 库存升序；quantityDesc 库存降序
      */
     private String sortMode;

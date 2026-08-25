@@ -5,7 +5,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 <mapper namespace="com.ruoyi.wms.mapper.HosePieceMapper">
 
     <sql id="pieceCols">
-        p.id, p.hose_code, p.length_m, p.status, p.remark,
+        p.id, p.sku_id, p.hose_code, p.length_m, p.status, p.remark,
         p.location_id, l.location_code, l.location_name,
         s.nickname, s.inch, s.layer_name
     </sql>
@@ -33,5 +33,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          ORDER BY CAST(SUBSTRING(p.hose_code, 1, 2) AS UNSIGNED),
                   SUBSTRING(p.hose_code, 3, 2), p.length_m DESC
     </select>
+
+
+    <select id="sumInStock" resultType="java.math.BigDecimal">
+        SELECT SUM(length_m) FROM wms_hose_piece WHERE sku_id = #{skuId} AND status = '在库'
+    </select>
+
+    <!--
+      wms_inventory 没有 (sku_id, warehouse_id) 唯一键，不能用 ON DUPLICATE KEY，
+      那样会插出重复行。改成先 UPDATE，影响 0 行再 INSERT。
+    -->
+    <update id="updateInventoryQty">
+        UPDATE wms_inventory SET quantity = #{total} WHERE sku_id = #{skuId}
+    </update>
+
+    <!-- 全库唯一仓库，warehouse_id 取 wms_warehouse 第一行；将来多仓要按库位反查 -->
+    <insert id="insertInventory">
+        INSERT INTO wms_inventory (sku_id, warehouse_id, quantity)
+        SELECT #{skuId}, w.id, #{total} FROM wms_warehouse w
+         WHERE NOT EXISTS (SELECT 1 FROM wms_inventory i WHERE i.sku_id = #{skuId})
+         ORDER BY w.id LIMIT 1
+    </insert>
 
 </mapper>

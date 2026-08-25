@@ -90,6 +90,10 @@ service.interceptors.response.use(res => {
     }
       return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
     } else if (code === 409){
+      // 请求配置里带 skipConflictAlert 的，由调用方自己处理冲突（例如出库遇到库存不足要二次确认），不弹全局框
+      if (res.config && res.config.skipConflictAlert) {
+        return Promise.reject(res.data)
+      }
       ElMessageBox.alert(
         res.data.detailMessage,
         msg

@@ -21,6 +21,9 @@ public class HosePieceVo extends BaseVo {
     private static final long serialVersionUID = 1L;
 
     private Long id;
+
+    /** 关联 wms_item_sku.id */
+    private Long skuId;
     private String hoseCode;
     private BigDecimal lengthM;
     private String status;

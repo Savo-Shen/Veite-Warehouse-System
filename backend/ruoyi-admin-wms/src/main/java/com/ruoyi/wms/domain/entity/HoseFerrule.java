@@ -28,6 +28,9 @@ public class HoseFerrule extends BaseEntity {
     @TableId(value = "id")
     private Long id;
 
+    /** 关联 wms_item_sku.id。库存/库位/进价都在主商品体系里，本表只存业务属性 */
+    private Long skuId;
+
     private String ferruleSku;
 
     private String ferruleName;
@@ -40,12 +43,8 @@ public class HoseFerrule extends BaseEntity {
     /** 非剥皮 / 剥皮 / 不分 */
     private String skinType;
 
-    /** NULL = 还没盘 */
-    private Integer qty;
 
-    private Long locationId;
 
-    private BigDecimal costPrice;
 
     private String remark;
 }

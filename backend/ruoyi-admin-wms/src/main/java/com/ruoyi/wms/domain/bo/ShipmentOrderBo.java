@@ -38,4 +38,10 @@ public class ShipmentOrderBo extends BaseOrderBo<ShipmentOrderDetailBo> {
      */
     @NotNull(message = "仓库不能为空", groups = { AddGroup.class, EditGroup.class })
     private Long warehouseId;
+
+    /**
+     * 允许扣成负库存。前端在「库存不足」提示里二次确认后才会传 true，
+     * 且还要系统参数 wms.inventory.allowNegative 打开才真正生效。不入库表，仅用于本次出库。
+     */
+    private Boolean allowNegative;
 }

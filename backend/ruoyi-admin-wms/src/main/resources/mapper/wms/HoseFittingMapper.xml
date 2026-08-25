@@ -4,17 +4,31 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.wms.mapper.HoseFittingMapper">
 
+<!--
+      库存、库位、进价都在主商品体系里，这里只 join 出来展示：
+        qty        <- wms_inventory.quantity（没有行 = 还没盘，跟 0 不是一回事）
+        location   <- wms_item_sku.item_location_id
+        cost_price <- wms_item_sku.cost_price
+      所以本页面对这三项是只读的，要改去商品管理或走入库/盘点单。
+    -->
     <sql id="fittingCols">
-        f.id, f.fitting_sku, f.field_name, f.thread_system, f.thread_spec,
+        f.id, f.sku_id, f.fitting_sku, f.field_name, f.thread_system, f.thread_spec,
         f.seat_type, f.seal_std, f.std_code, f.gender, f.angle, f.bore_hint,
-        f.seen_on_sheet, f.qty, f.location_id, l.location_code, l.location_name,
-        f.cost_price, f.brand, f.vendor_code, f.remark
+        f.seen_on_sheet, f.vendor_code, f.remark,
+        inv.quantity AS qty, sku.item_location_id AS location_id,
+        l.location_code, l.location_name, sku.cost_price, sku.selling_price
+    </sql>
+
+    <sql id="fittingJoin">
+        LEFT JOIN wms_item_sku  sku ON sku.id = f.sku_id
+        LEFT JOIN wms_inventory inv ON inv.sku_id = f.sku_id
+        LEFT JOIN wms_location  l   ON l.id = sku.item_location_id
     </sql>
 
     <select id="selectFittingPage" resultType="com.ruoyi.wms.domain.vo.HoseFittingVo">
         SELECT <include refid="fittingCols"/>
           FROM wms_hose_fitting f
-          LEFT JOIN wms_location l ON l.id = f.location_id
+        <include refid="fittingJoin"/>
         <where>
             <if test="bo.keyword != null and bo.keyword != ''">
                 AND (f.field_name  LIKE CONCAT('%', #{bo.keyword}, '%')
@@ -37,9 +51,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="bo.onlySeen != null and bo.onlySeen">
                 AND f.seen_on_sheet = 1
             </if>
-            <!-- qty IS NULL 是「还没盘」，不是没货，所以不能算进「有库存」 -->
+            <!-- 没有 wms_inventory 行 = 还没盘，不是没货，所以不能算进「有库存」 -->
             <if test="bo.onlyInStock != null and bo.onlyInStock">
-                AND f.qty &gt; 0
+                AND inv.quantity &gt; 0
             </if>
         </where>
         ORDER BY FIELD(f.thread_system, '公制', '英制', '美制'),
@@ -49,7 +63,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectBySkus" resultType="com.ruoyi.wms.domain.vo.HoseFittingVo">
         SELECT <include refid="fittingCols"/>
           FROM wms_hose_fitting f
-          LEFT JOIN wms_location l ON l.id = f.location_id
+        <include refid="fittingJoin"/>
          WHERE f.fitting_sku IN
         <foreach collection="skus" item="s" open="(" separator="," close=")">#{s}</foreach>
     </select>

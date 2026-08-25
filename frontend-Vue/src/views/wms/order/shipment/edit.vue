@@ -308,7 +308,7 @@
 </template>
 
 <script setup name="ShipmentOrderEdit">
-import {computed, getCurrentInstance, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
+import {computed, getCurrentInstance, h, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addShipmentOrder, getShipmentOrder, updateShipmentOrder, shipment} from "@/api/wms/shipmentOrder";
 import {delShipmentOrderDetail, getLastPrices} from "@/api/wms/shipmentOrderDetail";
 import {ElMessage, ElMessageBox} from "element-plus";
@@ -317,6 +317,7 @@ import {useWmsStore} from '@/store/modules/wms'
 import {numSub, generateNo} from '@/utils/ruoyi'
 import InventorySelect from "@/views/components/InventorySelect.vue";
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil"
+import {getConfigKey} from "@/api/system/config"
 
 const {proxy} = getCurrentInstance();
 const {wms_shipment_type} = proxy.useDict("wms_shipment_type");
@@ -534,6 +535,12 @@ const doSave = (orderStatus = 0) => {
   })
 }
 
+// 系统是否允许扣成负库存（基础资料 → 环境配置 → 库存）
+const allowNegativeEnabled = ref(false)
+getConfigKey('wms.inventory.allowNegative').then(res => {
+  allowNegativeEnabled.value = String(res.msg || '').trim() === 'true'
+}).catch(() => {})
+
 const doShipment = async () => {
   await proxy?.$modal.confirm('确认出库吗？');
   shipmentForm.value?.validate((valid) => {
@@ -548,20 +555,57 @@ const doShipment = async () => {
     if (invalidQuantityList?.length) {
       return ElMessage.error('请选择数量')
     }
-    const params = getParamsBeforeSave(1)
-
-    loading.value = true
-    shipment(params).then((res) => {
-      if (res.code === 200) {
-        ElMessage.success('出库成功')
-        close()
-      } else {
-        ElMessage.error(res.msg)
-      }
-    }).finally(()=>{
-      loading.value = false
-    })
+    submitShipment(getParamsBeforeSave(1), false)
   })
+}
+
+/**
+ * 提交出库。库存不足时后端返回 409，这里按系统开关决定是弹「仍然出库」二次确认还是直接报错。
+ */
+const submitShipment = (params, allowNegative) => {
+  loading.value = true
+  shipment({...params, allowNegative}, {skipConflictAlert: true}).then((res) => {
+    if (res.code === 200) {
+      ElMessage.success(allowNegative ? '出库成功，已产生负库存，请尽快盘点补正' : '出库成功')
+      close()
+    } else {
+      ElMessage.error(res.msg)
+    }
+  }).catch((err) => {
+    // err 是后端返回体（request.js 里 skipConflictAlert 的约定），其它异常一律忽略
+    if (!err || err.code !== 409) {
+      return
+    }
+    if (err.msg === '库存不足' && allowNegativeEnabled.value && !allowNegative) {
+      confirmNegativeShipment(params, err.detailMessage)
+    } else {
+      ElMessageBox.alert(err.detailMessage, err.msg)
+    }
+  }).finally(() => {
+    loading.value = false
+  })
+}
+
+/**
+ * 库存不足时的二次确认：说明会欠账多少，确认后才带 allowNegative 重新提交
+ */
+const confirmNegativeShipment = (params, detailMessage) => {
+  const lines = String(detailMessage || '').split('\n').filter(it => it)
+  ElMessageBox.confirm(
+    h('div', null, [
+      h('div', {style: 'margin-bottom: 8px'}, '以下商品的账面库存不够（多半是还没盘过库）：'),
+      ...lines.map(line => h('div', {style: 'color: #f56c6c; line-height: 1.8'}, line)),
+      h('div', {style: 'margin-top: 10px'}, '仍然出库会把账面扣成负数，作为「欠账」留痕。请在盘点时把它补正。')
+    ]),
+    '库存不足',
+    {
+      confirmButtonText: '仍然出库',
+      cancelButtonText: '返回修改',
+      type: 'warning'
+    }
+  ).then(() => {
+    submitShipment(params, true)
+  }).catch(() => {})
 }
 
 const updateToInvalid = async () => {
