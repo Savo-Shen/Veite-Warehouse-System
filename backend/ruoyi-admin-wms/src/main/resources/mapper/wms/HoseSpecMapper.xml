@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.HoseSpecMapper">
+
+    <!--
+      规格 + 在库汇总。
+
+      max_length_m 是重点：胶管余料不能接，判断「能不能接一根 12 米的」要看
+      最长的那一段，不是总米数。1602 合计 32 米但分成 10+10+4+8 四段，
+      看 total 会误判成够。
+    -->
+    <sql id="stockJoin">
+        LEFT JOIN (
+            SELECT p.hose_code,
+                   SUM(p.length_m)  AS total_length_m,
+                   COUNT(*)         AS piece_count,
+                   MAX(p.length_m)  AS max_length_m,
+                   GROUP_CONCAT(CAST(p.length_m AS DECIMAL(8,1)) ORDER BY p.length_m DESC SEPARATOR '+') AS piece_text,
+                   GROUP_CONCAT(DISTINCT CONCAT(l.location_code, ' ', IFNULL(l.location_name, '')) SEPARATOR '、') AS location_names
+              FROM wms_hose_piece p
+              LEFT JOIN wms_location l ON l.id = p.location_id
+             WHERE p.status = '在库'
+             GROUP BY p.hose_code
+        ) st ON st.hose_code = s.hose_code
+    </sql>
+
+    <select id="selectWithStock" resultType="com.ruoyi.wms.domain.vo.HoseSpecVo">
+        SELECT s.id, s.hose_code, s.bore_code, s.layer_code, s.inch, s.nickname,
+               s.layer_name, s.id_mm, s.od_mm, s.work_pressure_mpa, s.bend_radius_mm,
+               s.cost_price, s.price_source, s.std_ref, s.remark,
+               IFNULL(st.total_length_m, 0) AS total_length_m,
+               IFNULL(st.piece_count, 0)    AS piece_count,
+               IFNULL(st.max_length_m, 0)   AS max_length_m,
+               st.piece_text, st.location_names
+          FROM wms_hose_spec s
+        <include refid="stockJoin"/>
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (s.hose_code LIKE CONCAT('%', #{keyword}, '%')
+                  OR s.nickname  LIKE CONCAT('%', #{keyword}, '%')
+                  OR s.inch      LIKE CONCAT('%', #{keyword}, '%')
+                  OR s.layer_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="onlyInStock != null and onlyInStock">
+                AND st.piece_count &gt; 0
+            </if>
+        </where>
+        ORDER BY CAST(s.bore_code AS UNSIGNED), s.layer_code
+    </select>
+
+    <select id="selectOneWithStock" resultType="com.ruoyi.wms.domain.vo.HoseSpecVo">
+        SELECT s.id, s.hose_code, s.bore_code, s.layer_code, s.inch, s.nickname,
+               s.layer_name, s.id_mm, s.od_mm, s.work_pressure_mpa, s.bend_radius_mm,
+               s.cost_price, s.price_source, s.std_ref, s.remark,
+               IFNULL(st.total_length_m, 0) AS total_length_m,
+               IFNULL(st.piece_count, 0)    AS piece_count,
+               IFNULL(st.max_length_m, 0)   AS max_length_m,
+               st.piece_text, st.location_names
+          FROM wms_hose_spec s
+        <include refid="stockJoin"/>
+         WHERE s.hose_code = #{hoseCode}
+    </select>
+
+</mapper>

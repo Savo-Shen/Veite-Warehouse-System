@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.HoseFerruleMapper">
+
+    <!--
+      通径俗称从 wms_hose_spec 借一行来取（同一 bore_code 的各层俗称都一样，
+      取 MIN(layer_code) 那行即可），省得再建一张通径字典表。
+    -->
+    <sql id="ferruleCols">
+        r.id, r.ferrule_sku, r.ferrule_name, r.layer_scope, r.bore_code, r.skin_type,
+        r.qty, r.location_id, l.location_code, l.location_name,
+        r.cost_price, r.remark, s.nickname, s.inch
+    </sql>
+
+    <sql id="boreJoin">
+        LEFT JOIN wms_location l ON l.id = r.location_id
+        LEFT JOIN (
+            SELECT bore_code, MIN(nickname) AS nickname, MIN(inch) AS inch
+              FROM wms_hose_spec GROUP BY bore_code
+        ) s ON s.bore_code = r.bore_code
+    </sql>
+
+    <select id="selectFerruleList" resultType="com.ruoyi.wms.domain.vo.HoseFerruleVo">
+        SELECT <include refid="ferruleCols"/>
+          FROM wms_hose_ferrule r
+        <include refid="boreJoin"/>
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (r.ferrule_sku  LIKE CONCAT('%', #{keyword}, '%')
+                  OR r.ferrule_name LIKE CONCAT('%', #{keyword}, '%')
+                  OR s.nickname     LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY FIELD(r.layer_scope, '1层/2层', '3层', '4层', '6层'),
+                 CAST(r.bore_code AS UNSIGNED), r.skin_type
+    </select>
+
+    <select id="selectOneFor" resultType="com.ruoyi.wms.domain.vo.HoseFerruleVo">
+        SELECT <include refid="ferruleCols"/>
+          FROM wms_hose_ferrule r
+        <include refid="boreJoin"/>
+         WHERE r.layer_scope = #{layerScope}
+           AND r.bore_code   = #{boreCode}
+        <!-- 三层/六层那两档外套不分剥皮，skin_type 存的是「不分」，所以要兜底 -->
+        <if test="skinType != null and skinType != ''">
+           AND r.skin_type IN (#{skinType}, '不分')
+        </if>
+        <!-- 精确匹配的排前面，「不分」只作兜底 -->
+        <if test="skinType != null and skinType != ''">
+         ORDER BY FIELD(r.skin_type, #{skinType}) DESC
+        </if>
+         LIMIT 1
+    </select>
+
+</mapper>

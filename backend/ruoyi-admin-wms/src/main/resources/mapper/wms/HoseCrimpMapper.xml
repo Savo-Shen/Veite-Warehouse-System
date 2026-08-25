@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.HoseCrimpMapper">
+
+    <sql id="crimpCols">
+        c.id, c.layer_scope, c.bore_code, c.crimp_diameter_mm, c.die_no,
+        c.strip_length_mm, c.insert_depth_mm, c.press_gear, c.shop_can_crimp,
+        c.remark, s.nickname, s.inch
+    </sql>
+
+    <sql id="boreJoin">
+        LEFT JOIN (
+            SELECT bore_code, MIN(nickname) AS nickname, MIN(inch) AS inch
+              FROM wms_hose_spec GROUP BY bore_code
+        ) s ON s.bore_code = c.bore_code
+    </sql>
+
+    <select id="selectCrimpList" resultType="com.ruoyi.wms.domain.vo.HoseCrimpVo">
+        SELECT <include refid="crimpCols"/>
+          FROM wms_hose_crimp c
+        <include refid="boreJoin"/>
+         ORDER BY FIELD(c.layer_scope, '1层/2层', '3层', '4层', '6层'),
+                  CAST(c.bore_code AS UNSIGNED)
+    </select>
+
+    <select id="selectOneFor" resultType="com.ruoyi.wms.domain.vo.HoseCrimpVo">
+        SELECT <include refid="crimpCols"/>
+          FROM wms_hose_crimp c
+        <include refid="boreJoin"/>
+         WHERE c.layer_scope = #{layerScope} AND c.bore_code = #{boreCode}
+         LIMIT 1
+    </select>
+
+</mapper>
