@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.HosePieceMapper">
+
+    <sql id="pieceCols">
+        p.id, p.hose_code, p.length_m, p.status, p.remark,
+        p.location_id, l.location_code, l.location_name,
+        s.nickname, s.inch, s.layer_name
+    </sql>
+
+    <!-- 短的排前面：优先切最短的够用段，长料留着接长单 -->
+    <select id="selectInStock" resultType="com.ruoyi.wms.domain.vo.HosePieceVo">
+        SELECT <include refid="pieceCols"/>
+          FROM wms_hose_piece p
+          LEFT JOIN wms_location  l ON l.id = p.location_id
+          LEFT JOIN wms_hose_spec s ON s.hose_code = p.hose_code
+         WHERE p.status = '在库' AND p.hose_code = #{hoseCode}
+         ORDER BY p.length_m
+    </select>
+
+    <select id="selectAllInStock" resultType="com.ruoyi.wms.domain.vo.HosePieceVo">
+        SELECT <include refid="pieceCols"/>
+          FROM wms_hose_piece p
+          LEFT JOIN wms_location  l ON l.id = p.location_id
+          LEFT JOIN wms_hose_spec s ON s.hose_code = p.hose_code
+         WHERE p.status = '在库'
+        <if test="keyword != null and keyword != ''">
+            AND (p.hose_code LIKE CONCAT('%', #{keyword}, '%')
+              OR s.nickname  LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+         ORDER BY CAST(SUBSTRING(p.hose_code, 1, 2) AS UNSIGNED),
+                  SUBSTRING(p.hose_code, 3, 2), p.length_m DESC
+    </select>
+
+</mapper>

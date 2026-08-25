@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.EcProductMapper">
+
+    <!--
+      上新列表：一行一个电商商品。
+      各项计数用相关子查询而非多表 join，因为一个电商商品可关联多个 wms_item、
+      每个 item 又有多个 sku，直接 join 会让计数互相放大。商品总量 148，代价可忽略。
+    -->
+    <sql id="listingColumns">
+        p.id,
+        p.ec_name          AS ecName,
+        p.ec_title         AS ecTitle,
+        p.selling_points   AS sellingPoints,
+        p.attrs            AS attrs,
+        p.status           AS status,
+        p.remark           AS remark,
+        p.ec_category_id   AS ecCategoryId,
+        p.create_by        AS createBy,
+        p.create_time      AS createTime,
+        p.update_by        AS updateBy,
+        p.update_time      AS updateTime,
+        CONCAT(e.ec_l1, ' › ', e.ec_l2) AS ecCategoryPath,
+        e.pdd_cat_id       AS pddCatId,
+        e.tb_cat_id        AS tbCatId,
+        e.dy_cat_id        AS dyCatId,
+        (SELECT IFNULL(GROUP_CONCAT(DISTINCT b.brand_name ORDER BY b.brand_name SEPARATOR ' / '), '')
+           FROM ec_product_item pi
+           JOIN wms_item i ON i.id = pi.item_id
+           LEFT JOIN wms_item_brand b ON b.id = i.item_brand
+          WHERE pi.ec_product_id = p.id)                       AS brands,
+        (SELECT COUNT(*) FROM ec_product_item pi
+          WHERE pi.ec_product_id = p.id)                       AS itemCount,
+        (SELECT COUNT(*) FROM ec_product_item pi
+           JOIN wms_item i ON i.id = pi.item_id
+           JOIN wms_item_sku s ON s.item_id = i.id
+          WHERE pi.ec_product_id = p.id)                       AS skuCount,
+        (SELECT COUNT(*) FROM ec_product_item pi
+           JOIN wms_item i ON i.id = pi.item_id
+           JOIN wms_item_sku s ON s.item_id = i.id
+          WHERE pi.ec_product_id = p.id
+            AND (s.selling_price IS NULL OR s.selling_price = 0)) AS noPriceCount,
+        (SELECT COUNT(*) FROM ec_product_item pi
+           JOIN wms_item i ON i.id = pi.item_id
+           JOIN wms_item_sku s ON s.item_id = i.id
+          WHERE pi.ec_product_id = p.id
+            AND s.cost_price IS NULL)                          AS noCostCount,
+        (SELECT COUNT(*) FROM ec_product_item pi
+           JOIN wms_item i ON i.id = pi.item_id
+           JOIN wms_item_sku s ON s.item_id = i.id
+          WHERE pi.ec_product_id = p.id
+            AND s.gross_weight IS NOT NULL)                    AS weighedCount,
+        (SELECT COUNT(*) FROM ec_product_item pi
+           JOIN wms_item i ON i.id = pi.item_id
+           JOIN wms_item_sku s ON s.item_id = i.id
+          WHERE pi.ec_product_id = p.id
+            AND s.pack_length IS NOT NULL)                     AS packedCount,
+        (SELECT COUNT(*) FROM ec_product_item pi
+           JOIN wms_item_media m ON m.item_id = pi.item_id
+          WHERE pi.ec_product_id = p.id)                       AS mediaCount
+    </sql>
+
+    <sql id="listingWhere">
+        <where>
+            <if test="bo.keyword != null and bo.keyword != ''">
+                AND (
+                    p.ec_name LIKE CONCAT('%', #{bo.keyword}, '%')
+                 OR p.ec_title LIKE CONCAT('%', #{bo.keyword}, '%')
+                 OR CONCAT(e.ec_l1, e.ec_l2) LIKE CONCAT('%', #{bo.keyword}, '%')
+                 OR EXISTS (SELECT 1 FROM ec_product_item pi
+                              JOIN wms_item i ON i.id = pi.item_id
+                              JOIN wms_item_brand b ON b.id = i.item_brand
+                             WHERE pi.ec_product_id = p.id
+                               AND b.brand_name LIKE CONCAT('%', #{bo.keyword}, '%'))
+                )
+            </if>
+            <if test="bo.ecCategoryId != null">
+                AND p.ec_category_id = #{bo.ecCategoryId}
+            </if>
+            <if test="bo.status != null and bo.status != ''">
+                AND p.status = #{bo.status}
+            </if>
+            <!-- 首发批次：售价齐、品牌齐、SKU 数在 1~10 之间，称重量最小，适合先跑通全流程 -->
+            <if test="bo.onlyReady != null and bo.onlyReady">
+                AND NOT EXISTS (SELECT 1 FROM ec_product_item pi
+                                  JOIN wms_item i ON i.id = pi.item_id
+                                  JOIN wms_item_sku s ON s.item_id = i.id
+                                 WHERE pi.ec_product_id = p.id
+                                   AND (s.selling_price IS NULL OR s.selling_price = 0))
+                AND NOT EXISTS (SELECT 1 FROM ec_product_item pi
+                                  JOIN wms_item i ON i.id = pi.item_id
+                                 WHERE pi.ec_product_id = p.id
+                                   AND i.item_brand IS NULL)
+                AND (SELECT COUNT(*) FROM ec_product_item pi
+                       JOIN wms_item i ON i.id = pi.item_id
+                       JOIN wms_item_sku s ON s.item_id = i.id
+                      WHERE pi.ec_product_id = p.id) BETWEEN 1 AND 10
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectListingPage" resultType="com.ruoyi.wms.domain.vo.EcProductVo">
+        SELECT <include refid="listingColumns"/>
+        FROM ec_product p
+        JOIN ec_category e ON e.id = p.ec_category_id
+        <include refid="listingWhere"/>
+        ORDER BY e.order_num, p.ec_name
+    </select>
+
+    <select id="selectListingByIds" resultType="com.ruoyi.wms.domain.vo.EcProductVo">
+        SELECT <include refid="listingColumns"/>
+        FROM ec_product p
+        JOIN ec_category e ON e.id = p.ec_category_id
+        WHERE p.id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY e.order_num, p.ec_name
+    </select>
+
+    <select id="selectSkusByProductId" resultType="com.ruoyi.wms.domain.vo.EcListingSkuVo">
+        SELECT
+            s.id            AS skuId,
+            s.sku_name      AS skuName,
+            b.brand_name    AS brandName,
+            i.unit          AS unit,
+            s.cost_price    AS costPrice,
+            s.selling_price AS sellingPrice,
+            s.net_weight    AS netWeight,
+            s.gross_weight  AS grossWeight,
+            s.pack_length   AS packLength,
+            s.pack_width    AS packWidth,
+            s.pack_height   AS packHeight,
+            sp.spec         AS spec,
+            sp.confidence   AS confidence
+        FROM ec_product_item pi
+        JOIN wms_item i ON i.id = pi.item_id
+        JOIN wms_item_sku s ON s.item_id = i.id
+        LEFT JOIN wms_item_brand b ON b.id = i.item_brand
+        LEFT JOIN ec_sku_spec sp ON sp.sku_id = s.id
+        WHERE pi.ec_product_id = #{productId}
+        ORDER BY b.brand_name, s.sku_name
+    </select>
+
+</mapper>

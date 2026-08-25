@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.mapper.HoseFittingMapper">
+
+    <sql id="fittingCols">
+        f.id, f.fitting_sku, f.field_name, f.thread_system, f.thread_spec,
+        f.seat_type, f.seal_std, f.std_code, f.gender, f.angle, f.bore_hint,
+        f.seen_on_sheet, f.qty, f.location_id, l.location_code, l.location_name,
+        f.cost_price, f.brand, f.vendor_code, f.remark
+    </sql>
+
+    <select id="selectFittingPage" resultType="com.ruoyi.wms.domain.vo.HoseFittingVo">
+        SELECT <include refid="fittingCols"/>
+          FROM wms_hose_fitting f
+          LEFT JOIN wms_location l ON l.id = f.location_id
+        <where>
+            <if test="bo.keyword != null and bo.keyword != ''">
+                AND (f.field_name  LIKE CONCAT('%', #{bo.keyword}, '%')
+                  OR f.fitting_sku LIKE CONCAT('%', #{bo.keyword}, '%')
+                  OR f.thread_spec LIKE CONCAT('%', #{bo.keyword}, '%')
+                  OR f.bore_hint   LIKE CONCAT('%', #{bo.keyword}, '%'))
+            </if>
+            <if test="bo.threadSystem != null and bo.threadSystem != ''">
+                AND f.thread_system = #{bo.threadSystem}
+            </if>
+            <if test="bo.seatType != null and bo.seatType != ''">
+                AND f.seat_type = #{bo.seatType}
+            </if>
+            <if test="bo.gender != null and bo.gender != ''">
+                AND f.gender = #{bo.gender}
+            </if>
+            <if test="bo.angle != null and bo.angle != ''">
+                AND f.angle = #{bo.angle}
+            </if>
+            <if test="bo.onlySeen != null and bo.onlySeen">
+                AND f.seen_on_sheet = 1
+            </if>
+            <!-- qty IS NULL 是「还没盘」，不是没货，所以不能算进「有库存」 -->
+            <if test="bo.onlyInStock != null and bo.onlyInStock">
+                AND f.qty &gt; 0
+            </if>
+        </where>
+        ORDER BY FIELD(f.thread_system, '公制', '英制', '美制'),
+                 f.thread_spec, f.seat_type, f.gender, f.angle
+    </select>
+
+    <select id="selectBySkus" resultType="com.ruoyi.wms.domain.vo.HoseFittingVo">
+        SELECT <include refid="fittingCols"/>
+          FROM wms_hose_fitting f
+          LEFT JOIN wms_location l ON l.id = f.location_id
+         WHERE f.fitting_sku IN
+        <foreach collection="skus" item="s" open="(" separator="," close=")">#{s}</foreach>
+    </select>
+
+</mapper>

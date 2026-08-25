@@ -45,19 +45,34 @@ public class ItemSku extends BaseEntity {
 
 
     /**
-     * 长(cm)
+     * 长(cm)。商品规格参数，不是包装尺寸——PU管此列存的是 200 米盘长。
      */
     private BigDecimal length;
 
     /**
-     * 宽(cm)
+     * 宽(cm)。同 length，属商品规格参数。
      */
     private BigDecimal width;
 
     /**
-     * 高(cm)
+     * 高(cm)。同 length，属商品规格参数。
      */
     private BigDecimal height;
+
+    /**
+     * 包装长(cm)。电商运费按体积重计费用这三项，须实测。
+     */
+    private BigDecimal packLength;
+
+    /**
+     * 包装宽(cm)
+     */
+    private BigDecimal packWidth;
+
+    /**
+     * 包装高(cm)
+     */
+    private BigDecimal packHeight;
 
     /**
      * 毛重(kg)
