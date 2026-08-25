@@ -69,3 +69,23 @@ SET @idx_flag = IF(
   'ALTER TABLE `wms_shipment_order` ADD INDEX `idx_record_only` (`record_only`)'
 );
 PREPARE s FROM @idx_flag; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ----------------------------
+-- 补充（纯记录单加数量之后）
+-- 最早一版纯记录单不填数量，明细的 quantity 是 NULL、单据 total_quantity 是 0，
+-- 金额等于销售价（隐含一件）。加上数量之后把这些老记录补成 1 件，
+-- 金额口径不变（1 × 销售价 = 原来的销售价），只是让数据和新口径对齐。
+-- 前后端遇到 NULL 也一律按一件算，所以这段只是补数据，不补也不会显示错。
+-- ----------------------------
+UPDATE `wms_shipment_order_detail` d
+  JOIN `wms_shipment_order` o ON o.id = d.order_id
+   SET d.`quantity` = 1
+ WHERE o.`record_only` = 1 AND d.`quantity` IS NULL;
+
+-- 单据总数量跟着明细重算
+UPDATE `wms_shipment_order` o
+   SET o.`total_quantity` = (
+         SELECT COALESCE(SUM(d.`quantity`), 0)
+           FROM `wms_shipment_order_detail` d WHERE d.`order_id` = o.`id`
+       )
+ WHERE o.`record_only` = 1;

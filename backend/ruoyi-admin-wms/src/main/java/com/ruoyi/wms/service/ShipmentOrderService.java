@@ -268,6 +268,12 @@ public class ShipmentOrderService {
         if (hasBlankName) {
             throw new BaseException("纯记录单的商品名称不能为空！");
         }
+        // 数量可以不填（按一件算），但填了就不能是 0 或负数，否则金额算出来没有意义
+        boolean hasBadQuantity = bo.getDetails().stream()
+            .anyMatch(it -> it.getQuantity() != null && it.getQuantity().signum() <= 0);
+        if (hasBadQuantity) {
+            throw new BaseException("纯记录单的数量必须大于 0！");
+        }
     }
 
     private void fillOrderTotals(ShipmentOrderBo bo) {
@@ -296,22 +302,28 @@ public class ShipmentOrderService {
     }
 
     /**
-     * 纯记录单的合计。它不填数量，所以一行就按一件算：明细金额取销售价，总金额是各行销售价之和。
-     * 总数量恒为 0——这单从来没动过货，任何按数量的统计都不该把它算进去。
+     * 纯记录单的合计：金额 = 数量 × 销售价，总额是各行金额之和。
+     * 这里的数量只用来算钱和留档，不会写进库存——纯记录单从头到尾不碰 wms_inventory。
+     * 没填数量的按一件算（老单据的 quantity 为空，回看时也当一件）。
      */
     private void fillRecordOnlyTotals(ShipmentOrderBo bo) {
+        BigDecimal totalQuantity = BigDecimal.ZERO;
         BigDecimal totalAmount = BigDecimal.ZERO;
         if (CollUtil.isNotEmpty(bo.getDetails())) {
             for (ShipmentOrderDetailBo detail : bo.getDetails()) {
-                // 数量留空，避免被误当成出过货
-                detail.setQuantity(null);
-                detail.setAmount(detail.getSalePrice());
-                if (detail.getSalePrice() != null) {
-                    totalAmount = totalAmount.add(detail.getSalePrice());
+                BigDecimal quantity = detail.getQuantity() == null ? BigDecimal.ONE : detail.getQuantity();
+                detail.setQuantity(quantity);
+                BigDecimal amount = detail.getSalePrice() == null
+                    ? null
+                    : detail.getSalePrice().multiply(quantity);
+                detail.setAmount(amount);
+                totalQuantity = totalQuantity.add(quantity);
+                if (amount != null) {
+                    totalAmount = totalAmount.add(amount);
                 }
             }
         }
-        bo.setTotalQuantity(BigDecimal.ZERO);
+        bo.setTotalQuantity(totalQuantity);
         bo.setTotalAmount(totalAmount);
     }
 }

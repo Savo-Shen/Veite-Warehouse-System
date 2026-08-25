@@ -157,6 +157,11 @@
               <el-table v-if="props.row.recordOnly" :data="props.row.details"
                         v-loading="detailLoading[props.$index]" empty-text="暂无记录明细">
                 <el-table-column label="商品名称" prop="itemName" />
+                <el-table-column label="数量" align="right" width="90">
+                  <template #default="{ row }">
+                    <span>{{ hasValue(row.quantity) ? Number(row.quantity).toFixed(0) : 1 }}</span>
+                  </template>
+                </el-table-column>
                 <el-table-column label="成本价(元)" align="right" width="140">
                   <template #default="{ row }">
                     <span v-if="hasValue(row.costPrice)">￥{{ Number(row.costPrice).toFixed(2) }}</span>
@@ -166,6 +171,12 @@
                 <el-table-column label="销售价(元)" align="right" width="140">
                   <template #default="{ row }">
                     <span v-if="hasValue(row.salePrice)">￥{{ Number(row.salePrice).toFixed(2) }}</span>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="金额(元)" align="right" width="130">
+                  <template #default="{ row }">
+                    <span v-if="hasValue(row.amount)">￥{{ Number(row.amount).toFixed(2) }}</span>
                     <span v-else>-</span>
                   </template>
                 </el-table-column>
@@ -231,7 +242,7 @@
         </el-table-column>
         <el-table-column label="总数量/总金额(元)" align="left" min-width="100">
           <template #default="{ row }">
-            <div class="flex-space-between" v-if="!row.recordOnly">
+            <div class="flex-space-between">
               <span>数量：</span>
               <el-statistic :value="Number(row.totalQuantity)" :precision="0"/>
             </div>
@@ -330,8 +341,7 @@
           <div v-if="row.bizOrderNo" class="mobile-order-card__row"><span>业务单号</span><strong>{{ row.bizOrderNo }}</strong></div>
           <div class="mobile-order-card__row" v-if="!row.recordOnly"><span>仓库</span><span>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName || '-' }}</span></div>
           <div class="mobile-order-card__row"><span>客户</span><span>{{ useWmsStore().merchantMap.get(row.merchantId)?.merchantName || '-' }}</span></div>
-          <div class="mobile-order-card__row" v-if="row.recordOnly"><span>金额</span><span>{{ row.totalAmount ?? '-' }}</span></div>
-          <div class="mobile-order-card__row" v-else><span>数量 / 金额</span><span>{{ Number(row.totalQuantity || 0).toFixed(0) }} / {{ row.totalAmount ?? '-' }}</span></div>
+          <div class="mobile-order-card__row"><span>数量 / 金额</span><span>{{ Number(row.totalQuantity || 0).toFixed(0) }} / {{ row.totalAmount ?? '-' }}</span></div>
           <div class="mobile-order-card__row">
             <span>出库日期</span>
             <span>{{ row.bizDate || parseTime(row.createTime, '{y}-{m}-{d}') }}<em v-if="isBackdated(row)" class="backdate-flag"> 补录</em></span>
@@ -347,6 +357,7 @@
             <div v-for="detail in row.details || []" :key="detail.id" class="mobile-detail-item">
               <template v-if="row.recordOnly">
                 <strong>{{ detail.itemName }}</strong>
+                <div class="mobile-order-card__row"><span>数量</span><span>{{ hasValue(detail.quantity) ? Number(detail.quantity).toFixed(0) : 1 }}</span></div>
                 <div class="mobile-order-card__row"><span>成本 / 销售</span>
                   <span>{{ hasValue(detail.costPrice) ? '￥' + Number(detail.costPrice).toFixed(2) : '-' }}
                     / {{ hasValue(detail.salePrice) ? '￥' + Number(detail.salePrice).toFixed(2) : '-' }}</span>
@@ -595,12 +606,13 @@ const rowClassName = ({ row }) => (row.recordOnly ? 'record-only-row' : '')
 
 const hasValue = (val) => val !== undefined && val !== null && val !== '' && !Number.isNaN(Number(val))
 
-/** 单行毛利。成本价和销售价都填了才算 */
+/** 整行毛利 =（销售价 − 成本价）× 数量。老记录单 quantity 为空，按一件算 */
 const grossProfit = (row) => {
   if (!hasValue(row.costPrice) || !hasValue(row.salePrice)) {
     return undefined
   }
-  return Number(row.salePrice) - Number(row.costPrice)
+  const quantity = hasValue(row.quantity) ? Number(row.quantity) : 1
+  return (Number(row.salePrice) - Number(row.costPrice)) * quantity
 }
 
 const isBackdated = (row) => {
@@ -744,7 +756,7 @@ async function handlePrint(row, sizeKey) {
         return {
           itemName: detail.itemName || '',
           skuName: '',
-          quantity: '',
+          quantity: Number(detail.quantity || 1).toFixed(0),
           unitPrice: detail.salePrice !== undefined && detail.salePrice !== null
             ? Number(detail.salePrice).toFixed(2) : '',
           amount: amount.toFixed(2)

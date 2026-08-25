@@ -124,7 +124,7 @@
                 </el-button>
               </div>
             </el-col>
-            <el-col :span="6" v-if="!form.recordOnly">
+            <el-col :span="6">
               <el-form-item label="总数量" prop="totalQuantity">
                 <el-input-number style="width: 100%" v-model="form.totalQuantity" :controls="false" :precision="0"
                                  :disabled="true"></el-input-number>
@@ -202,21 +202,35 @@
           </div>
           <el-table v-if="form.recordOnly" :data="form.details" border stripe
                     empty-text="点上面「添加一行」开始记录" class="desktop-only record-only-table">
-            <el-table-column label="商品名称" min-width="220">
+            <el-table-column label="商品名称" min-width="200">
               <template #default="{ row }">
                 <el-input v-model="row.itemName" placeholder="手工输入商品名称" maxlength="120" />
               </template>
             </el-table-column>
-            <el-table-column label="成本价" width="190">
+            <el-table-column label="数量" width="130">
               <template #default="{ row }">
-                <el-input-number v-model="row.costPrice" placeholder="成本价" :min="0" :precision="2"
-                                 :controls="false" style="width: 100%" />
+                <el-input-number v-model="row.quantity" placeholder="数量" :min="1" :precision="0"
+                                 :controls="false" style="width: 100%" @change="handleChangeRecordPrice" />
               </template>
             </el-table-column>
-            <el-table-column label="销售价" width="190">
+            <el-table-column label="成本价" width="150">
+              <template #default="{ row }">
+                <el-input-number v-model="row.costPrice" placeholder="成本价" :min="0" :precision="2"
+                                 :controls="false" style="width: 100%" @change="handleChangeRecordPrice" />
+              </template>
+            </el-table-column>
+            <el-table-column label="销售价" width="150">
               <template #default="{ row }">
                 <el-input-number v-model="row.salePrice" placeholder="销售价" :min="0" :precision="2"
                                  :controls="false" style="width: 100%" @change="handleChangeRecordPrice" />
+              </template>
+            </el-table-column>
+            <el-table-column label="金额" width="130" align="right">
+              <template #default="{ row }">
+                <span v-if="hasValue(row.amount)" style="color: #409EFF; font-weight: bold">
+                  ￥{{ Number(row.amount).toFixed(2) }}
+                </span>
+                <span v-else style="color: #c0c4cc">-</span>
               </template>
             </el-table-column>
             <el-table-column label="毛利" width="120" align="right">
@@ -228,7 +242,7 @@
                 <span v-else style="color: #c0c4cc">-</span>
               </template>
             </el-table-column>
-            <el-table-column label="备注" min-width="160">
+            <el-table-column label="备注" min-width="140">
               <template #default="{ row }">
                 <el-input v-model="row.remark" placeholder="选填" maxlength="100" />
               </template>
@@ -354,8 +368,14 @@
               </div>
               <div class="mobile-edit-fields">
                 <label>
+                  <span>数量</span>
+                  <el-input-number v-model="row.quantity" :min="1" :precision="0" :controls="false"
+                                   @change="handleChangeRecordPrice" />
+                </label>
+                <label>
                   <span>成本价</span>
-                  <el-input-number v-model="row.costPrice" :min="0" :precision="2" :controls="false" />
+                  <el-input-number v-model="row.costPrice" :min="0" :precision="2" :controls="false"
+                                   @change="handleChangeRecordPrice" />
                 </label>
                 <label>
                   <span>销售价</span>
@@ -364,8 +384,9 @@
                 </label>
               </div>
               <el-input v-model="row.remark" placeholder="备注（选填）" maxlength="100" />
-              <div class="mobile-edit-total" v-if="grossProfit(row) !== undefined">
-                毛利：￥{{ grossProfit(row).toFixed(2) }}
+              <div class="mobile-edit-total">
+                金额：￥{{ Number(row.amount || 0).toFixed(2) }}<template v-if="grossProfit(row) !== undefined">
+                　毛利：￥{{ grossProfit(row).toFixed(2) }}</template>
               </div>
             </div>
             <el-empty v-if="!form.details.length" description="点「添加一行」开始记录" :image-size="64" />
@@ -542,8 +563,10 @@ const addRecordRow = () => {
   form.value.details.push({
     rowKey: nextRowKey(),
     itemName: '',
+    quantity: 1,
     costPrice: undefined,
     salePrice: undefined,
+    amount: undefined,
     remark: undefined,
   })
 }
@@ -561,23 +584,33 @@ const handleToggleRecordOnly = (val) => {
   }
 }
 
-/** 单行毛利。成本价和销售价都填了才算，缺一个就不显示 */
+/** 没填数量的按一件算，跟后端 fillRecordOnlyTotals 口径保持一致 */
+const recordQuantity = (row) => (hasValue(row.quantity) ? Number(row.quantity) : 1)
+
+/** 整行毛利 =（销售价 − 成本价）× 数量。成本价和销售价缺一个就不显示 */
 const grossProfit = (row) => {
   if (!hasValue(row.costPrice) || !hasValue(row.salePrice)) {
     return undefined
   }
-  return Number(row.salePrice) - Number(row.costPrice)
+  return (Number(row.salePrice) - Number(row.costPrice)) * recordQuantity(row)
 }
 
-/** 纯记录单没有数量，总金额就是各行销售价之和（与后端 fillRecordOnlyTotals 口径一致） */
+/** 纯记录单：金额 = 数量 × 销售价，合计是各行之和（与后端 fillRecordOnlyTotals 口径一致） */
 const handleChangeRecordPrice = () => {
-  let sum = 0
+  let sumAmount = 0
+  let sumQuantity = 0
   form.value.details.forEach(it => {
-    if (hasValue(it.salePrice)) {
-      sum += Number(it.salePrice)
+    const quantity = recordQuantity(it)
+    sumQuantity += quantity
+    it.amount = hasValue(it.salePrice)
+      ? Number((Number(it.salePrice) * quantity).toFixed(2))
+      : undefined
+    if (hasValue(it.amount)) {
+      sumAmount += Number(it.amount)
     }
   })
-  form.value.totalAmount = Number(sum.toFixed(2))
+  form.value.totalQuantity = sumQuantity
+  form.value.totalAmount = Number(sumAmount.toFixed(2))
 }
 // 纯记录单 end
 
@@ -722,6 +755,7 @@ const getParamsBeforeSave = (orderStatus) => {
         return {
           id: it.id,
           itemName: (it.itemName || '').trim(),
+          quantity: recordQuantity(it),
           costPrice: it.costPrice,
           salePrice: it.salePrice,
           remark: it.remark
@@ -826,6 +860,9 @@ const doShipment = async () => {
       }
       if (rows.length !== form.value.details.length) {
         return ElMessage.error('有明细没填商品名称，请补齐或删掉这一行')
+      }
+      if (form.value.details.some(it => hasValue(it.quantity) && Number(it.quantity) <= 0)) {
+        return ElMessage.error('数量必须大于 0')
       }
     }
     submitShipment(getParamsBeforeSave(1), false)
@@ -967,7 +1004,13 @@ const loadDetail = (id) => {
     }
     if (form.value.recordOnly) {
       // 纯记录单的明细没有 id 以外的稳定标识，补个 rowKey 给 v-for 用
-      ;(form.value.details || []).forEach(it => { it.rowKey = it.id || nextRowKey() })
+      ;(form.value.details || []).forEach(it => {
+        it.rowKey = it.id || nextRowKey()
+        // 加数量之前存的老记录单 quantity 是空的，按一件回显
+        if (!hasValue(it.quantity)) {
+          it.quantity = 1
+        }
+      })
       handleChangeRecordPrice()
       return
     }
