@@ -55,6 +55,18 @@ public class MerchantController extends BaseController {
     }
 
     /**
+     * 生成下一个往来单位编号
+     *
+     * @param merchantType 企业类型，不同类型使用不同编号段
+     */
+    @SaCheckPermission("wms:merchant:edit")
+    @GetMapping("/nextCode")
+    public R<String> nextCode(Integer merchantType) {
+        // R.ok(String) 会当成提示语，编号要放在 data 里
+        return R.ok("操作成功", merchantService.generateMerchantCode(merchantType));
+    }
+
+    /**
      * 导出往来单位列表
      */
     @SaCheckPermission("wms:merchant:list")

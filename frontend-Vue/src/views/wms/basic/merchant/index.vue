@@ -147,12 +147,6 @@
     <!-- 添加或修改往来单位对话框 -->
     <el-drawer :title="title" v-model="open" append-to-body size="50%">
       <el-form ref="merchantRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="编号" prop="merchantCode">
-          <el-input v-model="form.merchantCode" placeholder="请输入编号" />
-        </el-form-item>
-        <el-form-item label="名称" prop="merchantName">
-          <el-input v-model="form.merchantName" placeholder="请输入名称" />
-        </el-form-item>
         <el-form-item label="企业类型" prop="merchantType">
           <el-select v-model="form.merchantType" placeholder="请选择企业类型">
             <el-option
@@ -162,6 +156,20 @@
               :value="parseInt(dict.value)"
             ></el-option>
           </el-select>
+        </el-form-item>
+        <el-form-item label="编号" prop="merchantCode">
+          <el-input
+            v-model="form.merchantCode"
+            :placeholder="form.merchantType ? '请输入编号' : '选择企业类型后自动生成，也可手动填写'"
+            @input="codeTouched = true"
+          >
+            <template #append>
+              <el-button icon="Refresh" :loading="codeLoading" @click="handleGenerateCode">自动生成</el-button>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="名称" prop="merchantName">
+          <el-input v-model="form.merchantName" placeholder="请输入名称" />
         </el-form-item>
         <el-form-item label="级别" prop="merchantLevel">
           <el-input v-model="form.merchantLevel" placeholder="请输入级别" />
@@ -229,7 +237,7 @@
 </template>
 
 <script setup name="Merchant">
-import { listMerchant, listMerchantNoPage, getMerchant, delMerchant, addMerchant, updateMerchant } from "@/api/wms/merchant";
+import { listMerchant, listMerchantNoPage, getMerchant, delMerchant, addMerchant, updateMerchant, getNextMerchantCode } from "@/api/wms/merchant";
 import {ElMessageBox, ElMessage} from "element-plus";
 import { getCurrentInstance, reactive, ref, toRefs, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useRouter } from "vue-router";
@@ -249,6 +257,9 @@ const ids = ref([]);
 const total = ref(0);
 const title = ref("");
 const pickerVisible = ref(false);
+// 编号是否被手动改过：改过就不再自动覆盖
+const codeTouched = ref(false);
+const codeLoading = ref(false);
 
 // 地图模式
 const viewMode = ref('list');
@@ -326,7 +337,36 @@ function reset() {
     updateTime: null
   };
   proxy.resetForm("merchantRef");
+  codeTouched.value = false;
 }
+
+/** 取下一个可用编号填入（新增时选完企业类型自动调用，也可手动点「自动生成」） */
+async function fillNextCode(merchantType) {
+  if (merchantType == null) return;
+  codeLoading.value = true;
+  try {
+    const res = await getNextMerchantCode(merchantType);
+    form.value.merchantCode = res.data;
+  } finally {
+    codeLoading.value = false;
+  }
+}
+
+/** 点击「自动生成」：重新按当前企业类型取号 */
+function handleGenerateCode() {
+  if (form.value.merchantType == null) {
+    proxy.$modal.msgWarning("请先选择企业类型");
+    return;
+  }
+  codeTouched.value = false;
+  fillNextCode(form.value.merchantType);
+}
+
+// 新增时切换企业类型自动带出该类型的下一个编号（用户手动改过则不覆盖）
+watch(() => form.value.merchantType, (type) => {
+  if (form.value.id != null || codeTouched.value) return;
+  fillNextCode(type);
+});
 
 /** 地图选点确认 */
 function handlePickLocation({ longitude, latitude, address }) {

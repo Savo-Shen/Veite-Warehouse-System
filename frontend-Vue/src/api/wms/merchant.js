@@ -18,6 +18,15 @@ export function listMerchantNoPage(query) {
   })
 }
 
+// 生成下一个往来单位编号
+export function getNextMerchantCode(merchantType) {
+  return request({
+    url: '/wms/merchant/nextCode',
+    method: 'get',
+    params: { merchantType }
+  })
+}
+
 // 查询往来单位详细
 export function getMerchant(id) {
   return request({
