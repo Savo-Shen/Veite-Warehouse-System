@@ -17,6 +17,7 @@ import com.ruoyi.common.core.utils.MapstructUtils;
 import com.ruoyi.common.core.utils.StreamUtils;
 import com.ruoyi.common.core.utils.StringUtils;
 import com.ruoyi.common.core.utils.file.FileUtils;
+import com.ruoyi.common.core.utils.file.MimeTypeUtils;
 import com.ruoyi.common.core.utils.SpringUtils;
 import com.ruoyi.common.oss.core.OssClient;
 import com.ruoyi.common.oss.entity.UploadResult;
@@ -166,7 +167,11 @@ public class SysOssService implements OssService {
 
     public SysOssVo upload(MultipartFile file) {
         String originalfileName = file.getOriginalFilename();
+        if (StringUtils.isBlank(originalfileName) || originalfileName.lastIndexOf(".") < 0) {
+            throw new ServiceException("文件名不合法，必须带扩展名");
+        }
         String suffix = StringUtils.substring(originalfileName, originalfileName.lastIndexOf("."), originalfileName.length());
+        assertAllowedSuffix(suffix);
         byte[] bytes;
         try {
             bytes = file.getBytes();
@@ -180,6 +185,19 @@ public class SysOssService implements OssService {
         UploadResult uploadResult = storage.uploadSuffix(bytes, suffix, file.getContentType());
         // 保存文件信息
         return buildResultEntity(originalfileName, suffix, storage.getConfigKey(), uploadResult);
+    }
+
+    /**
+     * 上传后缀白名单校验。
+     * 之前这里完全不校验，配合匿名可读的 /system/oss/blob/{ossId}，
+     * 任何有上传权限的账号都能放一个同源的 html 页面上去偷管理员 token。
+     */
+    private void assertAllowedSuffix(String suffix) {
+        String extension = StringUtils.removeStart(suffix, ".");
+        if (!StringUtils.equalsAnyIgnoreCase(extension, MimeTypeUtils.UPLOAD_ALLOWED_EXTENSION)) {
+            throw new ServiceException("不支持的文件类型: " + suffix
+                + "，允许的类型为 " + String.join("/", MimeTypeUtils.UPLOAD_ALLOWED_EXTENSION));
+        }
     }
 
     public SysOssVo upload(File file) {

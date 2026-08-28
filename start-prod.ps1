@@ -95,6 +95,36 @@ function Get-NewestSourceWriteTime {
     return $newest
 }
 
+function Test-JarIsProdBuild {
+    param([string]$JarPath)
+
+    # 打包 profile 是在编译期烘进 application.yml 的（@profiles.active@ 占位符）。
+    # 只比对文件时间戳发现不了「上一次是用 dev profile 打的」，必须真的翻开包看一眼，
+    # 否则升级后第一次启动会继续沿用旧的 dev 包，本次加固全部落空。
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($JarPath)
+        try {
+            $entry = $zip.GetEntry("BOOT-INF/classes/application.yml")
+            if ($null -eq $entry) {
+                return $false
+            }
+            $reader = New-Object System.IO.StreamReader($entry.Open())
+            try {
+                $content = $reader.ReadToEnd()
+            } finally {
+                $reader.Dispose()
+            }
+            return $content -match "(?m)^\s*active:\s*prod\s*$"
+        } finally {
+            $zip.Dispose()
+        }
+    } catch {
+        Write-Host "无法读取现有 Jar 的打包 profile（$($_.Exception.Message)），保险起见重新打包。" -ForegroundColor Yellow
+        return $false
+    }
+}
+
 function Invoke-BackendPackage {
     param(
         [string]$BackendDir,
@@ -111,12 +141,83 @@ function Invoke-BackendPackage {
         throw
     }
 
-    Write-Host "执行: mvn -DskipTests clean package（首次或改动较多时可能需要几分钟）"
-    $mvn = Start-Process -FilePath $MvnCmd -ArgumentList @("-DskipTests", "clean", "package") -WorkingDirectory $BackendDir -NoNewWindow -PassThru -Wait
+    # -Pprod 不能省：Maven 默认激活的是 dev profile，打出来的包会带上
+    # dev 的配置（actuator 全量暴露、p6spy 打开、代码生成器打进包里）。
+    Write-Host "执行: mvn -Pprod -DskipTests clean package（首次或改动较多时可能需要几分钟）"
+    $mvn = Start-Process -FilePath $MvnCmd -ArgumentList @("-Pprod", "-DskipTests", "clean", "package") -WorkingDirectory $BackendDir -NoNewWindow -PassThru -Wait
     if ($mvn.ExitCode -ne 0) {
-        throw "后端打包失败（mvn 退出码: $($mvn.ExitCode)）。请在 backend 目录手动执行 mvn -DskipTests clean package 查看详细错误。"
+        throw "后端打包失败（mvn 退出码: $($mvn.ExitCode)）。请在 backend 目录手动执行 mvn -Pprod -DskipTests clean package 查看详细错误。"
     }
     Write-Host "打包完成。" -ForegroundColor Green
+}
+
+function Get-NewestFrontendSourceWriteTime {
+    param([string]$Path)
+
+    $sourceExtensions = @(".vue", ".js", ".ts", ".jsx", ".tsx", ".json", ".css", ".scss", ".html", ".svg")
+    $skipDirectories = @("dist", "node_modules", ".git", ".idea", ".pnpm-store")
+
+    $newest = [DateTime]::MinValue
+    $pending = New-Object System.Collections.Stack
+    $pending.Push($Path)
+
+    while ($pending.Count -gt 0) {
+        $current = $pending.Pop()
+        foreach ($entry in Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue) {
+            if ($entry.PSIsContainer) {
+                if ($skipDirectories -notcontains $entry.Name) {
+                    $pending.Push($entry.FullName)
+                }
+            } elseif ($sourceExtensions -contains $entry.Extension.ToLower() -and $entry.LastWriteTime -gt $newest) {
+                $newest = $entry.LastWriteTime
+            }
+        }
+    }
+
+    return $newest
+}
+
+function Invoke-FrontendBuild {
+    param(
+        [string]$FrontendDir,
+        [string]$PnpmCmd
+    )
+
+    $DistIndex = Join-Path $FrontendDir "dist\index.html"
+    $NeedBuild = $false
+
+    if (-not (Test-Path $DistIndex)) {
+        Write-Host "未找到前端产物 dist\index.html，需要先构建。"
+        $NeedBuild = $true
+    } else {
+        $DistTime = (Get-Item $DistIndex).LastWriteTime
+        $SourceTime = Get-NewestFrontendSourceWriteTime -Path $FrontendDir
+        if ($SourceTime -gt $DistTime) {
+            Write-Host ("前端源码({0}) 比产物({1}) 新，需要重新构建。" -f $SourceTime.ToString("yyyy-MM-dd HH:mm:ss"), $DistTime.ToString("yyyy-MM-dd HH:mm:ss")) -ForegroundColor Yellow
+            $NeedBuild = $true
+        } else {
+            Write-Host ("前端产物已是最新（{0}），跳过构建。" -f $DistTime.ToString("yyyy-MM-dd HH:mm:ss"))
+        }
+    }
+
+    if (-not $NeedBuild) {
+        return
+    }
+
+    if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
+        Write-Host "安装前端依赖: pnpm install --frozen-lockfile"
+        $install = Start-Process -FilePath $PnpmCmd -ArgumentList @("install", "--frozen-lockfile") -WorkingDirectory $FrontendDir -NoNewWindow -PassThru -Wait
+        if ($install.ExitCode -ne 0) {
+            throw "前端依赖安装失败（pnpm 退出码: $($install.ExitCode)）。"
+        }
+    }
+
+    Write-Host "执行: pnpm run build:prod"
+    $build = Start-Process -FilePath $PnpmCmd -ArgumentList @("run", "build:prod") -WorkingDirectory $FrontendDir -NoNewWindow -PassThru -Wait
+    if ($build.ExitCode -ne 0) {
+        throw "前端构建失败（pnpm 退出码: $($build.ExitCode)）。请在 frontend-Vue 目录手动执行 pnpm run build:prod 查看详细错误。"
+    }
+    Write-Host "前端构建完成。" -ForegroundColor Green
 }
 
 function Test-PortInUse {
@@ -224,8 +325,11 @@ try {
         if ($SourceTime -gt $JarTime) {
             Write-Host "源码($SourceStamp) 比 Jar($JarStamp) 新，需要重新打包。" -ForegroundColor Yellow
             $NeedPackage = $true
+        } elseif (-not (Test-JarIsProdBuild -JarPath $BackendJar)) {
+            Write-Host "现有 Jar 不是 prod 包（可能是历史上用默认 dev profile 打的），需要重新打包。" -ForegroundColor Yellow
+            $NeedPackage = $true
         } else {
-            Write-Host "Jar 已是最新（$JarStamp），跳过打包。"
+            Write-Host "Jar 已是最新的 prod 包（$JarStamp），跳过打包。"
         }
     }
 
@@ -245,9 +349,16 @@ try {
     }
     $BackendStarted = $true
 
+    Write-Step "检查前端产物是否为最新"
+    Invoke-FrontendBuild -FrontendDir $FrontendDir -PnpmCmd $PnpmCmd
+
     Write-Step "启动前端服务"
-    Write-Host "使用 production 环境变量启动 Vite，本地代理 /prod-api 到 http://localhost:8080"
-    $FrontendProcess = Start-Process -FilePath $PnpmCmd -ArgumentList @("run", "dev", "--", "--mode", "production", "--host", "0.0.0.0", "--port", "80") -WorkingDirectory $FrontendDir -NoNewWindow -PassThru
+    # 用 vite preview 托管 dist 静态产物，而不是 vite dev。
+    # vite dev 会把整个源码树通过 /@fs/ 暴露出去（能读到 backend/.env、
+    # application-local.yml 里的数据库密码和 JWT 密钥），绝不能对公网开。
+    # preview 只发 dist 目录，同时沿用 vite.config.js 里的 /prod-api 反代。
+    Write-Host "使用 vite preview 托管 dist 静态产物，本地代理 /prod-api 到 http://localhost:8080"
+    $FrontendProcess = Start-Process -FilePath $PnpmCmd -ArgumentList @("run", "preview", "--", "--mode", "production", "--host", "0.0.0.0", "--port", "80") -WorkingDirectory $FrontendDir -NoNewWindow -PassThru
     $FrontendStarted = $true
 
     Write-Host ""

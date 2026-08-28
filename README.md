@@ -10,7 +10,10 @@
 - **Windows**: `system.bat` 或 `powershell -ExecutionPolicy Bypass -File .\dev-start.ps1`
 
 > 开发时更推荐 `dev-start.sh` / `dev-start.ps1`，它会加载 `backend/.env`，并且按 `Ctrl+C` 会同时关闭前端和后端。
-> 前端开发命令统一使用 `pnpm run dev`。
+> 前端开发命令统一使用 `pnpm run dev`（默认只绑 `127.0.0.1`，需要从手机等其他设备访问时加 `--host`）。
+> **生产环境不要用 `pnpm run dev`** —— vite 开发服务器会通过 `/@fs/` 暴露整个源码树。
+> 生产走 `pnpm run build:prod` 产出 `dist`，再用 nginx 或 `pnpm run preview` 托管，
+> `start-prod.bat` 已经是这个流程。后端打包必须带 `-Pprod`。
 
 #### 脚本使用说明
 
@@ -87,11 +90,20 @@
 
 ### 网络与安全
 
+> 公网部署的完整安全说明见 **[docs/security-hardening.md](docs/security-hardening.md)**：
+> 已完成的加固项、以及必须由运维完成的事项（HTTPS、凭据轮换、防火墙）。
+
 - 公网只开放 `80` 和 `443`；`22` 仅允许办公网络或固定 IP 访问。
 - `8080`、`3306`、`6379` 不应对公网开放。Compose 部署中后端、Redis 默认只在 Docker 网络内通信。
+  一旦 `8080` 直接可达，nginx 上的限流和 actuator 拦截会被整个绕过。
 - 生产环境应使用域名和 HTTPS，并在云安全组和服务器防火墙中同时限制来源。
+  `docker/nginx.conf` 里已备好 443 的完整配置和证书申请命令（注释状态）。
 - `.env.docker` 中必须替换 `JWT_SECRET_KEY`、数据库密码和 Redis 密码；密码应使用随机长字符串。
+  `JWT_SECRET_KEY` 为空、仍是示例值或短于 32 字符时，应用会直接拒绝启动。
+- 后端打包必须使用 `mvn -Pprod`。默认激活的是 `dev` profile，打出来的包会带上
+  p6spy、代码生成器，Actuator 也不是生产配置。
 - 管理后台、数据库导入和备份功能只授予必要的管理员账号，数据库导入前必须先备份。
+- 生产包中不含代码生成器（`tool:gen:*` 相关权限可以直接回收）。
 
 ### 磁盘与备份估算
 

@@ -1,4 +1,5 @@
 com.ruoyi.common.core.config.ApplicationConfig
+com.ruoyi.common.core.config.ClientIpConfig
 com.ruoyi.common.core.config.AsyncConfig
 com.ruoyi.common.core.config.RuoYiConfig
 com.ruoyi.common.core.config.ThreadPoolConfig

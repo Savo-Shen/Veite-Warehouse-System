@@ -50,12 +50,6 @@
             <artifactId>ruoyi-common-ratelimiter</artifactId>
         </dependency>
 
-        <!-- 代码生成-->
-        <dependency>
-            <groupId>com.ruoyi</groupId>
-            <artifactId>ruoyi-generator</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -75,6 +69,40 @@
 <!--        </dependency>-->
 
     </dependencies>
+
+    <profiles>
+        <!--
+            代码生成器只在开发环境引入。
+            /tool/gen/genCode 会按 gen_table.gen_path（用户可填）往服务器磁盘写文件，
+            /tool/gen/db/list 能列出全部库表。生产环境不需要这个能力，
+            打进包里等于给「管理员账号被撞开」这件事额外附赠一个任意文件写入。
+        -->
+        <profile>
+            <id>local</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.ruoyi</groupId>
+                    <artifactId>ruoyi-generator</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>dev</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>com.ruoyi</groupId>
+                    <artifactId>ruoyi-generator</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- prod 刻意不引入 ruoyi-generator -->
+        <profile>
+            <id>prod</id>
+        </profile>
+    </profiles>
 
     <build>
         <finalName>${project.artifactId}</finalName>

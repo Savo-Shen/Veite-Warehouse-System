@@ -1,1 +1,2 @@
 com.ruoyi.common.satoken.config.SaTokenConfig
+com.ruoyi.common.satoken.config.JwtSecretValidator

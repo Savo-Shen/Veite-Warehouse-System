@@ -36,6 +36,11 @@ public class CreateReceiptDraftTool implements AiTool {
     private final ObjectMapper objectMapper;
 
     @Override
+    public String requiredPermission() {
+        return "wms:receipt:all";
+    }
+
+    @Override
     public String name() {
         return "create_receipt_draft";
     }

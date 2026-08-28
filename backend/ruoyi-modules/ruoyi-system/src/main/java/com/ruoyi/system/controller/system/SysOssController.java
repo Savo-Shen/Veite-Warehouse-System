@@ -12,6 +12,7 @@ import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.common.core.validate.QueryGroup;
 import com.ruoyi.common.log.enums.BusinessType;
 import com.ruoyi.common.core.exception.ServiceException;
+import com.ruoyi.common.core.utils.file.MimeTypeUtils;
 import com.ruoyi.system.domain.bo.SysOssBo;
 import com.ruoyi.system.domain.entity.SysOssBlob;
 import com.ruoyi.system.domain.vo.SysOssVo;
@@ -108,11 +109,19 @@ public class SysOssController extends BaseController {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
-        if (blob.getContentType() != null) {
-            response.setContentType(blob.getContentType());
+        // contentType 是上传时由客户端提供的，不能原样回显：
+        // 这个端点匿名同源可读，回一个 text/html 就是存储型 XSS。
+        // 只有确定安全的类型才内联渲染，其余一律当附件下载。
+        String contentType = blob.getContentType();
+        if (MimeTypeUtils.isInlineSafeContentType(contentType)) {
+            response.setContentType(contentType);
+            response.setHeader("Content-Disposition", "inline");
         } else {
             response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+            response.setHeader("Content-Disposition", "attachment; filename=\"" + ossId + "\"");
         }
+        // 禁止浏览器按内容猜测类型，否则上面的限制会被 MIME sniffing 绕过
+        response.setHeader("X-Content-Type-Options", "nosniff");
         // 图片等静态资源允许缓存，减少重复请求
         response.setHeader("Cache-Control", "max-age=31536000");
         response.setContentLength(blob.getData().length);

@@ -1,6 +1,8 @@
 package com.ruoyi.system.controller.system;
 
 import cn.dev33.satoken.annotation.SaIgnore;
+import com.ruoyi.common.ratelimiter.annotation.RateLimiter;
+import com.ruoyi.common.ratelimiter.enums.LimitType;
 import com.ruoyi.common.web.core.BaseController;
 import com.ruoyi.common.core.domain.R;
 import com.ruoyi.common.core.domain.bo.RegisterBody;
@@ -28,6 +30,7 @@ public class SysRegisterController extends BaseController {
     /**
      * 用户注册
      */
+    @RateLimiter(time = 3600, count = 5, limitType = LimitType.IP)
     @SaIgnore
     @PostMapping("/register")
     public R<Void> register(@Validated @RequestBody RegisterBody user) {

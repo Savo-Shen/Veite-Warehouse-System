@@ -2,6 +2,7 @@ package com.ruoyi.common.core.utils;
 
 import cn.hutool.core.convert.Convert;
 import cn.hutool.extra.servlet.JakartaServletUtil;
+import com.ruoyi.common.core.utils.ip.ClientIpResolver;
 import cn.hutool.http.HttpStatus;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -166,8 +167,19 @@ public class ServletUtils extends JakartaServletUtil {
         return StringUtils.equalsAnyIgnoreCase(ajax, "json", "xml");
     }
 
+    /**
+     * 获取客户端真实 IP。
+     * <p>
+     * 覆盖 Hutool 的同名实现：Hutool 会无条件采信 X-Forwarded-For 等请求头，
+     * 而这些头由客户端自由构造，会让登录失败锁定、接口限流等按 IP 计数的逻辑形同虚设。
+     * 这里改为只在请求来自可信代理网段时才采信代理头，见 {@link ClientIpResolver}。
+     */
     public static String getClientIP() {
         return getClientIP(getRequest());
+    }
+
+    public static String getClientIP(HttpServletRequest request) {
+        return ClientIpResolver.resolve(request);
     }
 
     /**

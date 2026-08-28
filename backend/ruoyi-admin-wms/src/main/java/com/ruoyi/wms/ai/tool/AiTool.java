@@ -20,6 +20,17 @@ public interface AiTool {
     /** 工具名（英文、唯一），模型据此调用 */
     String name();
 
+    /**
+     * 使用该工具所需的权限标识，与对应业务接口保持一致。
+     * <p>
+     * AI 是代表用户行事的，能力上限必须等于用户自己的权限上限，
+     * 否则一个只有查看权限的账号就能通过对话读到全部库存、出库价格和毛利。
+     * 返回 null 表示无需额外权限。
+     */
+    default String requiredPermission() {
+        return null;
+    }
+
     /** 工具描述：写清楚“什么时候用、能得到什么”，模型据此决定是否调用 */
     String description();
 

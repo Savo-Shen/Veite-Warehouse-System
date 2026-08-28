@@ -16,8 +16,8 @@ captcha:
   type: MATH
   # line 线段干扰 circle 圆圈干扰 shear 扭曲干扰
   category: CIRCLE
-  # 数字验证码位数
-  numberLength: 1
+  # 数字验证码位数（1 位算术题答案空间太小，公网环境至少 2 位）
+  numberLength: 2
   # 字符验证码长度
   charLength: 4
 
@@ -102,11 +102,12 @@ spring:
 sa-token:
   # token名称 (同时也是cookie名称)
   token-name: Authorization
-  # token有效期 90 天；客户端重新打开系统时会主动续期 单位: 秒
-  timeout: 7776000
+  # token有效期 30 天；客户端重新打开系统时会主动续期 单位: 秒
+  # 公网环境不宜过长：token 一旦泄露，在有效期内无法感知也无法自动失效
+  timeout: 2592000
   # 多端不同 token 有效期 可查看 LoginHelper.loginByDevice 方法自定义
-  # token最低活跃时间，连续 30 天未使用则失效 单位: 秒
-  active-timeout: 2592000
+  # token最低活跃时间，连续 7 天未使用则失效 单位: 秒
+  active-timeout: 604800
   # 允许动态设置 token 有效期
   dynamic-active-timeout: true
   # 是否允许同一账号并发登录 (为true时允许一起登录, 为false时新登录挤掉旧登录)
@@ -119,11 +120,32 @@ sa-token:
   is-read-cookie: false
   # token前缀
   token-prefix: "Bearer"
-  # jwt秘钥（务必通过环境变量 JWT_SECRET_KEY 覆盖为随机长字符串，默认值仅用于本地）
-  jwt-secret-key: ${JWT_SECRET_KEY:abcdefghijklmnopqrstuvwxyz}
+  # jwt秘钥。刻意不设默认值：缺失时直接启动失败，
+  # 否则会静默退化成一个公开的弱密钥，任何人都能伪造 admin token。
+  # 生成方式：openssl rand -hex 32，写入 backend/.env 的 JWT_SECRET_KEY
+  jwt-secret-key: ${JWT_SECRET_KEY}
 
 # security配置
 security:
+  # 客户端真实 IP 解析。登录失败锁定和接口限流都按这个 IP 计数，
+  # 所以绝不能无条件采信 X-Forwarded-For —— 那是客户端自己写的。
+  client-ip:
+    # 只有当请求的 TCP 对端落在 trusted-proxies 内时，代理头才会被采信
+    trust-proxy-headers: true
+    # X-Real-IP 优先：反向代理无条件覆写它，客户端塞不进值。
+    # 生产 nginx 前面还有 Cloudflare，snippets/ssl-params.conf 里配了
+    # set_real_ip_from <CF 网段> + real_ip_header CF-Connecting-IP，
+    # 所以 nginx 的 $remote_addr 已经是真实客户端 IP。
+    header-names:
+      - X-Real-IP
+      - X-Forwarded-For
+    # 反向代理所在网段。默认覆盖 nginx 同机部署（回环）和 Docker 网桥。
+    # 后端若直接暴露公网，这些网段不会命中，代理头自动被忽略。
+    trusted-proxies:
+      - 127.0.0.1/32
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
   # 排除路径
   excludes:
     # 静态资源
@@ -137,9 +159,6 @@ security:
     # swagger 文档配置
     - /*/api-docs
     - /*/api-docs/**
-    # actuator 监控配置
-    - /actuator
-    - /actuator/**
     # logo
     - /wms/image/logo
     # 数据库存储模式下的文件回读端点（供 <img> 等匿名加载）
@@ -244,8 +263,8 @@ xss:
   enabled: true
   # 排除链接（多个用逗号分隔）
   excludes: /system/notice
-  # 匹配链接
-  urlPatterns: /system/*,/monitor/*,/tool/*
+  # 匹配链接（/wms/* 是全部业务接口，之前没被过滤）
+  urlPatterns: /system/*,/monitor/*,/tool/*,/wms/*
 
 # 全局线程池相关配置
 thread-pool:
@@ -264,16 +283,18 @@ lock4j:
   expire: 30000
 
 --- # Actuator 监控端点的配置项
+# 默认只暴露 health，且不显示细节。
+# 之前是 include: '*' + 匿名放行，等于把 /actuator/heapdump（整个 JVM 堆，
+# 含数据库密码、JWT 密钥、所有在线 token）和 /actuator/logfile 挂在公网上。
+# 现在即使打包时漏了 -Pprod，也不会退化成全量暴露；且所有端点都需要登录。
 management:
   endpoints:
     web:
       exposure:
-        include: '*'
+        include: health
   endpoint:
     health:
-      show-details: ALWAYS
-    logfile:
-      external-file: ./logs/sys-console.log
+      show-details: never
 
 --- # AI 助手配置（OpenAI 兼容协议，接入 new-api 等网关，换模型/供应商只改这里）
 wms:

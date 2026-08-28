@@ -32,6 +32,11 @@ public class QueryInventoryTool implements AiTool {
     private final ObjectMapper objectMapper;
 
     @Override
+    public String requiredPermission() {
+        return "wms:inventory:all";
+    }
+
+    @Override
     public String name() {
         return "query_inventory";
     }

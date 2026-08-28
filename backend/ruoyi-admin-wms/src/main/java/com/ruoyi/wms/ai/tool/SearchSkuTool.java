@@ -28,6 +28,11 @@ public class SearchSkuTool implements AiTool {
     private final ObjectMapper objectMapper;
 
     @Override
+    public String requiredPermission() {
+        return "wms:item:list";
+    }
+
+    @Override
     public String name() {
         return "search_sku";
     }

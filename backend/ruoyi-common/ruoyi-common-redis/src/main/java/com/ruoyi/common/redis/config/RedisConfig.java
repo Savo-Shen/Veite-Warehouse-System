@@ -67,7 +67,15 @@ public class RedisConfig {
             RedissonProperties.SingleServerConfig singleServerConfig = redissonProperties.getSingleServerConfig();
             if (ObjectUtil.isNotNull(singleServerConfig)) {
                 // 使用单机模式
-                config.useSingleServer()
+                org.redisson.config.SingleServerConfig single = config.useSingleServer();
+                // Redisson 只要 password 不为 null 就会发 AUTH。
+                // application-prod.yml 里写的是 ${REDIS_PASSWORD:}，未配置时解析成空串（非 null），
+                // 结果对着没设密码的 Redis 发 AUTH ""，被服务端拒绝、应用起不来。
+                // 这里把空串还原成 null。
+                if (single.getPassword() != null && single.getPassword().isBlank()) {
+                    single.setPassword(null);
+                }
+                single
                     //设置redis key前缀
                     .setNameMapper(new KeyPrefixHandler(redissonProperties.getKeyPrefix()))
                     .setTimeout(singleServerConfig.getTimeout())

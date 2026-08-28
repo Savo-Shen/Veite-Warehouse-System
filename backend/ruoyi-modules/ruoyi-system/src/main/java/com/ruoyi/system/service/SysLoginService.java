@@ -59,6 +59,13 @@ public class SysLoginService {
     private Integer lockTime;
 
     /**
+     * 账号级别的错误次数上限 = maxRetryCount * 该倍数。
+     * 用于挡住换 IP 的分布式撞库：单个来源打不满 5 次就换 IP，账号级计数仍在累加。
+     */
+    @Value("${user.password.globalRetryMultiplier:4}")
+    private Integer globalRetryMultiplier;
+
+    /**
      * 登录验证
      *
      * @param username 用户名
@@ -307,34 +314,45 @@ public class SysLoginService {
      * 登录校验
      */
     private void checkLogin(LoginType loginType, String username, Supplier<Boolean> supplier) {
+        // 两级计数：
+        //   来源级 (账号 + 客户端IP)  —— 阈值 maxRetryCount，挡住单点爆破
+        //   账号级 (仅账号)          —— 阈值 maxRetryCount * globalRetryMultiplier，挡住换 IP 的分布式撞库
+        // 只有来源级计数会因为攻击者换 IP 而重置，账号级不会。
+        // 注意：clientIP 必须来自 ServletUtils.getClientIP()（已做可信代理校验），
+        // 直接采信 X-Forwarded-For 会让来源级计数可以被随意重置。
         String clientIP = ServletUtils.getClientIP();
-        String errorKey = CacheConstants.PWD_ERR_CNT_KEY + username+":"+clientIP;
+        String sourceKey = CacheConstants.PWD_ERR_CNT_KEY + username + ":" + clientIP;
+        String accountKey = CacheConstants.PWD_ERR_CNT_KEY + username;
+        int accountLimit = maxRetryCount * Math.max(1, globalRetryMultiplier);
         String loginFail = Constants.LOGIN_FAIL;
 
-        // 获取用户登录错误次数，默认为0 (可自定义限制策略 例如: key + username + ip)
-        int errorNumber = ObjectUtil.defaultIfNull(RedisUtils.getCacheObject(errorKey), 0);
+        int sourceNumber = ObjectUtil.defaultIfNull(RedisUtils.getCacheObject(sourceKey), 0);
+        int accountNumber = ObjectUtil.defaultIfNull(RedisUtils.getCacheObject(accountKey), 0);
         // 锁定时间内登录 则踢出
-        if (errorNumber >= maxRetryCount) {
+        if (sourceNumber >= maxRetryCount || accountNumber >= accountLimit) {
             recordLogininfor(username, loginFail, MessageUtils.message(loginType.getRetryLimitExceed(), maxRetryCount, lockTime));
             throw new UserException(loginType.getRetryLimitExceed(), maxRetryCount, lockTime);
         }
 
         if (supplier.get()) {
             // 错误次数递增
-            errorNumber++;
-            RedisUtils.setCacheObject(errorKey, errorNumber, Duration.ofMinutes(lockTime));
+            sourceNumber++;
+            accountNumber++;
+            RedisUtils.setCacheObject(sourceKey, sourceNumber, Duration.ofMinutes(lockTime));
+            RedisUtils.setCacheObject(accountKey, accountNumber, Duration.ofMinutes(lockTime));
             // 达到规定错误次数 则锁定登录
-            if (errorNumber >= maxRetryCount) {
+            if (sourceNumber >= maxRetryCount || accountNumber >= accountLimit) {
                 recordLogininfor(username, loginFail, MessageUtils.message(loginType.getRetryLimitExceed(), maxRetryCount, lockTime));
                 throw new UserException(loginType.getRetryLimitExceed(), maxRetryCount, lockTime);
             } else {
                 // 未达到规定错误次数
-                recordLogininfor(username, loginFail, MessageUtils.message(loginType.getRetryLimitCount(), errorNumber));
-                throw new UserException(loginType.getRetryLimitCount(), errorNumber);
+                recordLogininfor(username, loginFail, MessageUtils.message(loginType.getRetryLimitCount(), sourceNumber));
+                throw new UserException(loginType.getRetryLimitCount(), sourceNumber);
             }
         }
 
         // 登录成功 清空错误次数
-        RedisUtils.deleteObject(errorKey);
+        RedisUtils.deleteObject(sourceKey);
+        RedisUtils.deleteObject(accountKey);
     }
 }

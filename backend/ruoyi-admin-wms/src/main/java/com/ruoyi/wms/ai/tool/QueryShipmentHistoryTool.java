@@ -46,6 +46,11 @@ public class QueryShipmentHistoryTool implements AiTool {
     private static final int LIMIT = 20;
 
     @Override
+    public String requiredPermission() {
+        return "wms:shipment:all";
+    }
+
+    @Override
     public String name() {
         return "query_shipment_history";
     }

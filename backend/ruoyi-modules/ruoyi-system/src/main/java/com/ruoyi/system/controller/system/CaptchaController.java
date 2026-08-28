@@ -11,6 +11,8 @@ import com.ruoyi.common.core.domain.R;
 import com.ruoyi.common.core.utils.SpringUtils;
 import com.ruoyi.common.core.utils.StringUtils;
 import com.ruoyi.common.core.utils.reflect.ReflectUtils;
+import com.ruoyi.common.ratelimiter.annotation.RateLimiter;
+import com.ruoyi.common.ratelimiter.enums.LimitType;
 import com.ruoyi.common.redis.utils.RedisUtils;
 import com.ruoyi.common.web.config.properties.CaptchaProperties;
 import com.ruoyi.common.web.enums.CaptchaType;
@@ -51,6 +53,7 @@ public class CaptchaController {
      *
      * @param phonenumber 用户手机号
      */
+    @RateLimiter(time = 300, count = 5, limitType = LimitType.IP)
     @GetMapping("/captchaSms")
     public R<Void> smsCaptcha(@NotBlank(message = "{user.phonenumber.not.blank}") String phonenumber) {
         String key = CacheConstants.CAPTCHA_CODE_KEY + phonenumber;
@@ -72,6 +75,8 @@ public class CaptchaController {
     /**
      * 生成验证码
      */
+    // 不限流的话，攻击者可以无限刷验证码，把「每次尝试都要过验证码」的成本降到零
+    @RateLimiter(time = 300, count = 30, limitType = LimitType.IP)
     @GetMapping("/captchaImage")
     public R<Map<String, Object>> getCode() {
         boolean captchaEnabled = captchaProperties.getEnable();

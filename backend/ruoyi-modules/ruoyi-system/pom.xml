@@ -66,6 +66,12 @@
             <artifactId>ruoyi-common-web</artifactId>
         </dependency>
 
+        <!-- 登录/验证码/注册等匿名接口需要 @RateLimiter 限流 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-common-ratelimiter</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>com.ruoyi</groupId>
             <artifactId>ruoyi-common-security</artifactId>

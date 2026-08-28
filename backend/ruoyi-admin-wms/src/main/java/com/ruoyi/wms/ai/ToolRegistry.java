@@ -1,5 +1,6 @@
 package com.ruoyi.wms.ai;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.wms.ai.tool.AiTool;
@@ -30,9 +31,24 @@ public class ToolRegistry {
         log.info("AI 工具已注册: {}", tools.keySet());
     }
 
-    /** OpenAI tools 数组 */
+    /**
+     * OpenAI tools 数组，按当前登录用户的权限过滤。
+     * <p>
+     * 只把用户自己有权限调的工具交给模型，模型看不到的工具自然也不会去调。
+     */
     public List<Map<String, Object>> specs() {
-        return tools.values().stream().map(AiTool::toSpec).toList();
+        return tools.values().stream()
+            .filter(ToolRegistry::permitted)
+            .map(AiTool::toSpec)
+            .toList();
+    }
+
+    /**
+     * 当前登录用户是否有权使用该工具。
+     */
+    private static boolean permitted(AiTool tool) {
+        String permission = tool.requiredPermission();
+        return permission == null || StpUtil.hasPermission(permission);
     }
 
     /** 该工具是否产出草稿（其结果需额外带回前端供用户确认） */
@@ -48,6 +64,12 @@ public class ToolRegistry {
         AiTool tool = tools.get(name);
         if (tool == null) {
             return "{\"error\":\"未知工具: " + name + "\"}";
+        }
+        // 即便 specs() 已经过滤过，这里仍要再查一次：
+        // 模型返回的工具名来自模型输出，不能当作可信输入。
+        if (!permitted(tool)) {
+            log.warn("用户无权使用 AI 工具[{}], 需要权限: {}", name, tool.requiredPermission());
+            return "{\"error\":\"当前账号没有使用该功能的权限\"}";
         }
         try {
             JsonNode args = objectMapper.readTree(argumentsJson == null || argumentsJson.isBlank() ? "{}" : argumentsJson);

@@ -79,6 +79,12 @@ services:
       - wms-backend
     ports:
       - "80:80"
+      # 配好证书后启用 HTTPS（同时取消 docker/nginx.conf 里 443 server 块的注释）
+      - "443:443"
+    # 证书目录挂进来供 nginx 读取；没有证书时这两行注释掉即可
+    # volumes:
+    #   - /etc/letsencrypt:/etc/letsencrypt:ro
+    #   - /var/www/certbot:/var/www/certbot:ro
     networks:
       - wms
 

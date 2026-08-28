@@ -39,6 +39,11 @@ public class CreateShipmentDraftTool implements AiTool {
     private final ObjectMapper objectMapper;
 
     @Override
+    public String requiredPermission() {
+        return "wms:shipment:all";
+    }
+
+    @Override
     public String name() {
         return "create_shipment_draft";
     }

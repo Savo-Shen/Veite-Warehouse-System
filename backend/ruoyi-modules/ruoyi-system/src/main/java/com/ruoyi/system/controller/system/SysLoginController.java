@@ -1,6 +1,8 @@
 package com.ruoyi.system.controller.system;
 
 import cn.dev33.satoken.annotation.SaIgnore;
+import com.ruoyi.common.ratelimiter.annotation.RateLimiter;
+import com.ruoyi.common.ratelimiter.enums.LimitType;
 import com.ruoyi.common.core.constant.Constants;
 import com.ruoyi.common.core.domain.R;
 import com.ruoyi.common.core.domain.bo.EmailLoginBody;
@@ -46,6 +48,8 @@ public class SysLoginController {
      * @param loginBody 登录信息
      * @return 结果
      */
+    // 同一来源 5 分钟内最多 20 次登录尝试，配合 SysLoginService 的两级失败计数一起挡爆破
+    @RateLimiter(time = 300, count = 20, limitType = LimitType.IP)
     @SaIgnore
     @PostMapping("/login")
     public R<Map<String, Object>> login(@Validated @RequestBody LoginBody loginBody) {
@@ -61,6 +65,7 @@ public class SysLoginController {
      * @param smsLoginBody 登录信息
      * @return 结果
      */
+    @RateLimiter(time = 300, count = 10, limitType = LimitType.IP)
     @SaIgnore
     @PostMapping("/smsLogin")
     public R<Map<String, Object>> smsLogin(@Validated @RequestBody SmsLoginBody smsLoginBody) {
@@ -75,6 +80,7 @@ public class SysLoginController {
      * @param body 登录信息
      * @return 结果
      */
+    @RateLimiter(time = 300, count = 10, limitType = LimitType.IP)
     @PostMapping("/emailLogin")
     public R<Map<String, Object>> emailLogin(@Validated @RequestBody EmailLoginBody body) {
         // 生成令牌
