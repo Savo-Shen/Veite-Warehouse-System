@@ -146,20 +146,51 @@
 
 ```
 本机 mvn -Pprod + pnpm build:prod
-  -> scp 到 savo-prod:~/staging/
-  -> 落位 /opt/wms/{app.jar,dist}
+  -> 把胖 jar 解包成目录
+  -> rsync -c 增量同步到 savo-prod:~/staging/{app,dist}
+  -> 硬链接落位成 /opt/wms/releases/<时间戳>/{app,dist}
+  -> 原子切换 /opt/wms/current 软链接
   -> systemctl restart wms-backend
+```
+
+服务器上的目录结构：
+
+```
+/opt/wms/
+  current -> releases/20260829-144302     # nginx 的 root 和 systemd 的 -cp 都指这里
+  releases/<时间戳>/{app,dist}            # 保留最近 5 个，互相硬链接，几乎不额外占盘
+  app.jar                                 # 迁移前的胖包，留作应急，已不再被使用
+  application-prod.yml  wms.env  logs/  backups/
 ```
 
 用 `./script/deploy-to-savo-prod.sh` 一条命令完成，它会：
 
 - 强制用 JDK 17（Lombok 1.18.30 在 JDK 21+ 上编译报 `TypeTag :: UNKNOWN`）
 - 强制 `-Pprod`，并在上传前校验产物确实是 prod 包、且不含 `ruoyi-generator`，否则中止
-- 上传前把线上现有 `app.jar` + `dist` 备份到 `~/wms-backup-<时间戳>/`
+- 解包后 `rsync -c` 同步。**`-c` 不能省**：每次构建都会刷新所有 class 和资源的 mtime，
+  不按内容校验的话，光 `ip2region.xdb` 那 11MB 每次都会重传。加了 `-c` 之后，
+  一次典型部署实际只传约 1MB（19 个自有模块 jar，它们的 zip 内嵌时间戳每次都变），
+  整个流程 1 分钟以内，其中网络部分只占几秒。
+- 落位用 `cp -al` 硬链接，所以每个 release 只为「这次真正变了的文件」付磁盘：
+  两个 release 各自 129M，加起来实际占盘 133M。老 release 就是备份，
+  不再单独拷一份 `~/wms-backup-*`。
 - 重启后从服务器本机做健康检查（actuator 在 nginx 上是 deny 的，外部打不到）
 
-回滚：`./script/deploy-to-savo-prod.sh --rollback`（回到上一次部署前的备份）。
-只想上传不重启：`--stage`。
+常用参数：
+
+| 参数 | 作用 |
+|---|---|
+| （无） | 全量构建 + 部署 |
+| `--backend-only` / `--frontend-only` | 只重建一侧，另一侧沿用服务器上现有产物 |
+| `--stage` | 只同步到 `~/staging`，不落位不重启 |
+| `--list` | 看有哪些 release、哪个生效、实际占盘多少 |
+| `--rollback` | 切回上一个 release（改软链接 + 重启，不重新上传，秒级） |
+| `--use <时间戳>` | 切到指定 release |
+
+**启动方式**：unit 里是 `-cp /opt/wms/current/app org.springframework.boot.loader.launch.JarLauncher`，
+等价于 `java -jar`，只是换成解包后的目录以便 rsync 算增量。
+**`WorkingDirectory` 必须留在 `/opt/wms`**——外置的 `application-prod.yml` 和 `logs/`
+都是按工作目录解析的，挪到 release 目录里会导致外置配置不再生效。
 
 **这台机器本来就已经做好的**（不需要再动）
 
