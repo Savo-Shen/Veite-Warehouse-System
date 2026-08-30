@@ -117,12 +117,30 @@ if [ "$DO_BACKEND" = 1 ]; then
     ( cd "$ROOT/backend" && mvn -Pprod -DskipTests clean package )
 
     step "校验产物确实是 prod 包"
-    unzip -p "$JAR" BOOT-INF/classes/application.yml | grep -qE '^\s*active:\s*prod\s*$' \
+    # 先把清单读进变量再匹配，不要写成 `unzip -l ... | grep -q ...`：
+    # grep -q 命中后立刻退出，unzip 吃到 SIGPIPE，在 set -o pipefail 下
+    # 整条管道被判失败——命中反而当成没命中，检查全是反的。
+    JAR_LIST=$(unzip -l "$JAR")
+    JAR_APP_YML=$(unzip -p "$JAR" BOOT-INF/classes/application.yml)
+
+    grep -qE '^\s*active:\s*prod\s*$' <<<"$JAR_APP_YML" \
         || { echo "产物不是 prod 包，中止"; exit 1; }
-    if unzip -l "$JAR" | grep -q 'ruoyi-generator'; then
+
+    if grep -q 'ruoyi-generator' <<<"$JAR_LIST"; then
         echo "产物里还有 ruoyi-generator，中止（应只在 dev profile 引入）"; exit 1
     fi
-    echo "OK：active=prod，且不含 ruoyi-generator"
+
+    # application-prod.yml 被 .gitignore 忽略，只存在于主检出里。
+    # 从 git worktree 或新 clone 跑构建时它不在，打出来的包缺数据库配置，
+    # 上线后会以「using password: NO」连不上 MySQL 直接 crashloop。
+    # 上面那条 active=prod 的检查查的是 application.yml，抓不到这种情况。
+    if ! grep -q 'BOOT-INF/classes/application-prod.yml' <<<"$JAR_LIST"; then
+        echo "产物里没有 application-prod.yml，中止。"
+        echo "这个文件被 gitignore，只在主检出里：$ROOT/backend/ruoyi-admin-wms/src/main/resources/"
+        echo "从 worktree 部署的话，先把它和 application-local.yml 拷进来再重跑。"
+        exit 1
+    fi
+    echo "OK：active=prod、含 application-prod.yml、且不含 ruoyi-generator"
 
     step "解包成目录"
     # 解包后用 org.springframework.boot.loader.launch.JarLauncher 启动，
