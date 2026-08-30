@@ -11,12 +11,15 @@
         <img :src="userStore.avatar" class="avatar" />
         <template #dropdown>
           <el-dropdown-menu>
+            <el-dropdown-item command="setting">布局设置</el-dropdown-item>
             <el-dropdown-item command="desktop">电脑版</el-dropdown-item>
             <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
     </header>
+
+    <settings ref="settingRef" />
 
     <main>
       <section class="page-title">
@@ -143,6 +146,7 @@ import { listInventoryBoard } from "@/api/wms/inventory";
 import { getReceiptOrder, listReceiptOrder } from "@/api/wms/receiptOrder";
 import { getShipmentOrder, listShipmentOrder } from "@/api/wms/shipmentOrder";
 import OrderImageGallery from "@/components/OrderImageGallery";
+import Settings from "@/layout/components/Settings";
 import useUserStore from "@/store/modules/user";
 import { useWmsStore } from "@/store/modules/wms";
 
@@ -164,6 +168,7 @@ const loading = ref(false);
 const detailLoading = ref(false);
 const expandedId = ref(null);
 const searchRef = ref(null);
+const settingRef = ref(null);
 const typeText = computed(() => type.value === "receipt" ? "入库" : "出库");
 const isOrderMode = computed(() => type.value === "receipt" || type.value === "shipment");
 const pageMeta = computed(() => {
@@ -262,7 +267,9 @@ async function toggleDetail(order) {
 }
 
 function handleCommand(command) {
-  if (command === "desktop") {
+  if (command === "setting") {
+    settingRef.value.openSetting();
+  } else if (command === "desktop") {
     router.push("/index?desktop=1");
   } else if (command === "logout") {
     ElMessageBox.confirm("确定退出登录吗？", "提示", { confirmButtonText: "退出", cancelButtonText: "取消", type: "warning" })

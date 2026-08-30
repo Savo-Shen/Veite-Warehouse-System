@@ -16,8 +16,11 @@ captcha:
   type: MATH
   # line 线段干扰 circle 圆圈干扰 shear 扭曲干扰
   category: CIRCLE
-  # 数字验证码位数（1 位算术题答案空间太小，公网环境至少 2 位）
-  numberLength: 2
+  # 数字验证码位数。2 位会出「73*48=」这种两位数乘法，真人算得头疼，
+  # 而验证码本来就拦不住脚本/大模型——真正兜底的是 /captchaImage 上的
+  # IP 限流（5 分钟 30 次）和登录失败锁定（Redis pwd_err_cnt），
+  # 所以这里按「只挡住最粗糙的自动化、别为难真人」取 1 位。
+  numberLength: 1
   # 字符验证码长度
   charLength: 4
 

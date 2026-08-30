@@ -7,7 +7,7 @@
 
     <div class="right-menu">
       <!-- <div style="font-size: 16px;font-weight: bold;margin-right: 10px;">技术支持：关注“程序员诚哥”微信公众号，回复：支持</div> -->
-      <el-tooltip v-if="appStore.device !== 'mobile'" content="布局设置" effect="dark" placement="bottom">
+      <el-tooltip content="布局设置" effect="dark" placement="bottom">
         <div class="right-menu-item hover-effect setting-container" @click="setLayout">
           <el-icon><setting /></el-icon>
         </div>
@@ -208,6 +208,10 @@ function setLayout() {
       text-overflow: ellipsis;
       white-space: nowrap;
       transform: translateX(-50%);
+    }
+
+    .right-menu .setting-container {
+      padding: 0 4px;
     }
 
     .right-menu .avatar-container {
