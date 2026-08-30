@@ -7,6 +7,11 @@
 
     <div class="right-menu">
       <!-- <div style="font-size: 16px;font-weight: bold;margin-right: 10px;">技术支持：关注“程序员诚哥”微信公众号，回复：支持</div> -->
+      <el-tooltip v-if="appStore.device !== 'mobile'" content="布局设置" effect="dark" placement="bottom">
+        <div class="right-menu-item hover-effect setting-container" @click="setLayout">
+          <el-icon><setting /></el-icon>
+        </div>
+      </el-tooltip>
       <div class="avatar-container">
         <el-dropdown @command="handleCommand" class="right-menu-item hover-effect" trigger="click">
           <div class="avatar-wrapper">
@@ -147,6 +152,11 @@ function setLayout() {
           background: rgba(0, 0, 0, 0.025);
         }
       }
+    }
+
+    .setting-container {
+      display: flex;
+      align-items: center;
     }
 
     .avatar-container {

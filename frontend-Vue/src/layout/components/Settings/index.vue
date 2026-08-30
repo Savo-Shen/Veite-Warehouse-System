@@ -80,7 +80,12 @@
 
 <script setup>
 import variables from '@/assets/styles/variables.module.scss'
-import originElementPlus from 'element-plus/theme-chalk/index.css'
+// 全局引入 element-plus 主题样式（副作用导入）。
+// 主题色切换走 handleThemeStyle 改 CSS 变量，不需要拿到 CSS 文本；
+// 而 Vite 5 的 dev 模式下 CSS 模块不再提供 default 导出，
+// 写成 `import x from '...css'` 会直接让 dev 服务器报
+// "does not provide an export named 'default'" 并白屏。
+import 'element-plus/theme-chalk/index.css'
 import axios from 'axios'
 import { ElLoading, ElMessage } from 'element-plus'
 import { useDynamicTitle } from '@/utils/dynamicTitle'
