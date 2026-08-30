@@ -120,7 +120,13 @@ function setLayout() {
   :deep(.app-main) {
     height: 100dvh;
     min-height: 0;
-    overflow: hidden;
+    // 这里必须是 auto 不能是 hidden：mobileStandalone 把 app-main 钉成
+    // 100dvh，而它内部（新建出入库单那两个页面）没有任何自带滚动容器，
+    // 写 hidden 的话超出一屏的内容直接被裁掉且划不动——商品明细和
+    // 「添加商品」整块都够不到。/wms/ai 自己按 --ai-vh 撑满一屏且有内部
+    // 滚动区，内容不溢出，所以改成 auto 对它没有影响。
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
   }
