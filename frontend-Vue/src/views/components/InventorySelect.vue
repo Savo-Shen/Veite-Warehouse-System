@@ -307,11 +307,14 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid #eef2f7;
   }
 
+  /* 整个抽屉内容纵向滚动。原来是 overflow: hidden，内容比抽屉高时
+     下面那截（分页、展开高级搜索后的一堆表单项）直接被裁掉且滑不到。 */
   .mobile-friendly-selector .el-drawer__body {
     display: flex;
     flex-direction: column;
     padding: 12px;
-    overflow: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .mobile-friendly-selector .el-form {
@@ -341,10 +344,13 @@ onBeforeUnmount(() => {
     min-height: 38px;
   }
 
+  /* 不能靠给 .el-table 设 overflow 让列表自己滚：el-table 只有在传了
+     height/max-height 时才会把 .el-table__body-wrapper 变成滚动容器，
+     否则表格就是撑满内容的自然高度。所以这里让它保持自然高度，
+     由上面的 el-drawer__body 统一滚。 */
   .mobile-friendly-selector .el-table {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 260px;
-    overflow: auto;
   }
 
   .mobile-friendly-selector .el-table__cell {
