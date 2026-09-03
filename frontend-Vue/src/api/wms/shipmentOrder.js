@@ -61,3 +61,12 @@ export function getShipmentOrderLogs(id) {
     method: 'get'
   })
 }
+
+// 事后补充备注和现场照片（出库/作废后的单子也能补，只改这两样，每次都会记进变更历史）
+export function supplementShipmentOrder(data) {
+  return request({
+    url: '/wms/shipmentOrder/supplement',
+    method: 'put',
+    data: data
+  })
+}

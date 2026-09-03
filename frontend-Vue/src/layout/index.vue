@@ -31,9 +31,17 @@ const needTagsView = computed(() => settingsStore.tagsView);
 const fixedHeader = computed(() => settingsStore.fixedHeader);
 const route = useRoute()
 
+// 手机上不套系统外壳（侧边栏/导航/标签栏）的页面，各自画满整屏
 const mobileStandalonePaths = ['/receiptOrderEdit', '/shipmentOrderEdit', '/wms/ai']
+// 其中这几个自己管高度和滚动（AI 页是「头部固定 + 消息区内部滚」的聊天布局），
+// 要把 app-main 钉死成一屏；其余的（出入库编辑页）是普通长表单，得让页面自己往下滚，
+// 钉死一屏会把底部的商品明细和操作栏裁掉、划不到底。
+const mobileFullscreenPaths = ['/wms/ai']
 const isMobileStandalone = computed(() => (
   device.value === 'mobile' && mobileStandalonePaths.includes(route.path)
+))
+const isMobileFullscreen = computed(() => (
+  device.value === 'mobile' && mobileFullscreenPaths.includes(route.path)
 ))
 
 const classObj = computed(() => ({
@@ -41,7 +49,8 @@ const classObj = computed(() => ({
   openSidebar: sidebar.value.opened,
   withoutAnimation: sidebar.value.withoutAnimation,
   mobile: device.value === 'mobile',
-  mobileStandalone: isMobileStandalone.value
+  mobileStandalone: isMobileStandalone.value,
+  mobileFullscreen: isMobileFullscreen.value
 }))
 
 const { width, height } = useWindowSize();
@@ -117,6 +126,17 @@ function setLayout() {
 }
 
 .mobileStandalone {
+  :deep(.app-main) {
+    // 没有导航和标签栏了，顶部的让位也一并去掉
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    // 高度交给内容撑，页面照常往下滚（app-main 自带 overflow: hidden，
+    // 一旦给它定高就等于把超出一屏的内容裁掉，怎么划都到不了底）
+    min-height: 100dvh;
+  }
+}
+
+.mobileFullscreen {
   :deep(.app-main) {
     height: 100dvh;
     min-height: 0;

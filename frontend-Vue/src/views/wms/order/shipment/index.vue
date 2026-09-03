@@ -310,7 +310,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="editable(scope.row)"
-                :content="'出库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '出库' : '作废') + '，无法修改！' "
+                :content="'出库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '出库' : '作废') + '，无法修改！备注和现场照片可以走下面的「补充」补。' "
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:shipment:all']" :disabled="!editable(scope.row)">修改</el-button>
@@ -339,6 +339,9 @@
                 @click="handlePrint(scope.row)"
               >打印</el-button>
             </div>
+            <div class="mt10">
+              <el-button link type="primary" v-hasPermi="['wms:shipment:all']" @click="handleSupplement(scope.row)">补充</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -364,6 +367,7 @@
           <div class="mobile-order-card__row"><span>创建时间</span><span>{{ parseTime(row.createTime, '{mm}-{dd} {hh}:{ii}') }}</span></div>
           <div class="mobile-order-card__actions">
             <el-button @click="handleGoDetail(row)">{{ expandedRowKeys.includes(row.id) ? '收起' : '查看' }}</el-button>
+            <el-button @click="handleSupplement(row)">补充</el-button>
             <el-button type="primary" :disabled="!editable(row)" @click="handleUpdate(row)">
               {{ row.recordOnly ? '修改' : '继续出库' }}
             </el-button>
@@ -526,6 +530,13 @@
         <el-button type="primary" @click="doPrint">打印</el-button>
       </template>
     </el-dialog>
+
+    <!-- 出库/作废后也能补的备注和现场照片 -->
+    <shipment-supplement-dialog
+      v-model="supplementVisible"
+      :order="supplementOrder"
+      @saved="handleSupplementSaved"
+    />
   </div>
 </template>
 
@@ -543,6 +554,7 @@ import {
 } from "@/components/PrintTemplate/veite-shipment-panel";
 import { printStyleHandler, loadPrintLogo } from "@/utils/print";
 import OrderImageGallery from "@/components/OrderImageGallery";
+import ShipmentSupplementDialog from "@/components/ShipmentSupplementDialog";
 
 const { proxy } = getCurrentInstance();
 const { wms_shipment_status, wms_shipment_type} = proxy.useDict("wms_shipment_status", "wms_shipment_type");
@@ -869,13 +881,15 @@ const LOG_LABELS = {
   CREATE: '建单',
   UPDATE: '修改',
   SHIPMENT: '出库 / 保存记录',
-  VOID: '作废'
+  VOID: '作废',
+  SUPPLEMENT: '补充备注/图片'
 }
 const LOG_TYPES = {
   CREATE: 'primary',
   UPDATE: 'warning',
   SHIPMENT: 'success',
-  VOID: 'danger'
+  VOID: 'danger',
+  SUPPLEMENT: 'info'
 }
 const logLabel = (action) => LOG_LABELS[action] || action
 const logType = (action) => LOG_TYPES[action] || 'info'
@@ -892,6 +906,31 @@ function loadOrderLogs(row) {
   })
 }
 // 变更历史 end
+
+// 事后补充备注/图片 start
+const supplementVisible = ref(false)
+const supplementOrder = ref(null)
+
+function handleSupplement(row) {
+  supplementOrder.value = row
+  supplementVisible.value = true
+}
+
+/**
+ * 保存成功后就地更新这一行，不整页刷新——列表可能停在第 3 页、还展开着别的单，
+ * 重新拉一遍会把这些都弹回去。展开着的话顺带把变更历史重拉一次，新记的那条立刻可见。
+ */
+function handleSupplementSaved(payload) {
+  const row = shipmentOrderList.value.find(it => it.id === payload.id)
+  if (row) {
+    row.remark = payload.remark
+    row.supplementImageIds = payload.supplementImageIds
+    if (expandedRowKeys.value.includes(row.id)) {
+      loadOrderLogs(row)
+    }
+  }
+}
+// 事后补充备注/图片 end
 
 function loadShipmentOrderDetail(row) {
   const index = shipmentOrderList.value.findIndex(it => it.id === row.id)

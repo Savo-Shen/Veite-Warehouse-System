@@ -3,6 +3,7 @@ package com.ruoyi.wms.service;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.Assert;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ruoyi.common.core.constant.HttpStatus;
@@ -16,6 +17,7 @@ import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.wms.domain.bo.ShipmentOrderBo;
 import com.ruoyi.wms.domain.bo.ShipmentOrderDetailBo;
+import com.ruoyi.wms.domain.bo.ShipmentOrderSupplementBo;
 import com.ruoyi.wms.domain.entity.ShipmentOrder;
 import com.ruoyi.wms.domain.entity.ShipmentOrderDetail;
 import com.ruoyi.wms.domain.vo.ShipmentOrderVo;
@@ -189,6 +191,38 @@ public class ShipmentOrderService {
         } else if (summary != null) {
             shipmentOrderLogService.record(bo.getId(), bo.getOrderNo(), ShipmentOrderLogService.ACTION_UPDATE, summary);
         }
+    }
+
+    /**
+     * 事后补充备注和现场照片。
+     *
+     * 出库单出库/作废之后整单锁死，是怕改了明细跟已经动过的库存对不上账；备注和照片
+     * 既不进库存也不进金额，签收单第二天才拍到、当时漏写一句说明都是常事，得能补进去。
+     * 所以这里不看单据状态，但只认这两个字段，其余一概不接——想改明细还是得走正常修改。
+     */
+    @Transactional
+    public void supplement(ShipmentOrderSupplementBo bo) {
+        ShipmentOrder exist = shipmentOrderMapper.selectById(bo.getId());
+        if (exist == null) {
+            throw new BaseException("出库单不存在");
+        }
+        String summary = shipmentOrderLogService.diffSupplement(exist, bo);
+        if (summary == null) {
+            // 什么都没改就当没点过，免得刷出一条空历史
+            return;
+        }
+        // 清空备注要写 null 进库，updateById 的非空策略会把 null 当「不更新」跳过，
+        // 所以这里显式 set 两个字段
+        LambdaUpdateWrapper<ShipmentOrder> luw = Wrappers.lambdaUpdate();
+        luw.eq(ShipmentOrder::getId, bo.getId());
+        luw.set(ShipmentOrder::getRemark, StringUtils.isBlank(bo.getRemark()) ? null : bo.getRemark().trim());
+        luw.set(ShipmentOrder::getSupplementImageIds,
+            StringUtils.isBlank(bo.getSupplementImageIds()) ? null : bo.getSupplementImageIds().trim());
+        // 传一个空实体进去，让 MP 的自动填充把 update_by / update_time 带上——
+        // 列表页的「更新」两列否则还停在建单那天，看着像谁都没动过
+        shipmentOrderMapper.update(new ShipmentOrder(), luw);
+        shipmentOrderLogService.record(bo.getId(), exist.getOrderNo(),
+            ShipmentOrderLogService.ACTION_SUPPLEMENT, summary);
     }
 
     /**

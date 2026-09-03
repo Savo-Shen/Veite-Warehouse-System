@@ -118,6 +118,8 @@
           </div>
           <div class="actions">
             <el-button size="large" @click="toggleDetail(order)">{{ expandedId === order.id ? '收起' : '详情' }}</el-button>
+            <!-- 照片是在手机上拍的，出库单出完库之后补备注和图片的入口就得留在这儿 -->
+            <el-button v-if="type === 'shipment'" size="large" @click="openSupplement(order)">补充</el-button>
             <el-button type="primary" size="large" :disabled="[-1, 1].includes(order.orderStatus)" @click="continueOrder(order)">
               继续{{ typeText }}
             </el-button>
@@ -136,6 +138,12 @@
         </el-empty>
       </section>
     </main>
+
+    <shipment-supplement-dialog
+      v-model="supplementVisible"
+      :order="supplementOrder"
+      @saved="handleSupplementSaved"
+    />
   </div>
 </template>
 
@@ -147,6 +155,7 @@ import { getReceiptOrder, listReceiptOrder } from "@/api/wms/receiptOrder";
 import { getShipmentOrder, listShipmentOrder } from "@/api/wms/shipmentOrder";
 import OrderImageGallery from "@/components/OrderImageGallery";
 import Settings from "@/layout/components/Settings";
+import ShipmentSupplementDialog from "@/components/ShipmentSupplementDialog";
 import useUserStore from "@/store/modules/user";
 import { useWmsStore } from "@/store/modules/wms";
 
@@ -263,6 +272,23 @@ async function toggleDetail(order) {
     Object.assign(order, response.data);
   } finally {
     detailLoading.value = false;
+  }
+}
+
+const supplementVisible = ref(false);
+const supplementOrder = ref(null);
+
+function openSupplement(order) {
+  supplementOrder.value = order;
+  supplementVisible.value = true;
+}
+
+/** 就地改这一行，别整页重搜——搜索词和展开状态都还留着 */
+function handleSupplementSaved(payload) {
+  const order = orders.value.find(it => it.id === payload.id);
+  if (order) {
+    order.remark = payload.remark;
+    order.supplementImageIds = payload.supplementImageIds;
   }
 }
 

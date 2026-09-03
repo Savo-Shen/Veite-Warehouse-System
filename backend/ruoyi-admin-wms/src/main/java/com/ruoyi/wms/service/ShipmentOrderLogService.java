@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.ruoyi.common.core.utils.StringUtils;
 import com.ruoyi.wms.domain.bo.ShipmentOrderBo;
 import com.ruoyi.wms.domain.bo.ShipmentOrderDetailBo;
+import com.ruoyi.wms.domain.bo.ShipmentOrderSupplementBo;
+import com.ruoyi.wms.domain.entity.ShipmentOrder;
 import com.ruoyi.wms.domain.entity.ShipmentOrderLog;
 import com.ruoyi.wms.domain.vo.ShipmentOrderDetailVo;
 import com.ruoyi.wms.domain.vo.ShipmentOrderLogVo;
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -43,6 +47,8 @@ public class ShipmentOrderLogService {
     public static final String ACTION_UPDATE = "UPDATE";
     public static final String ACTION_SHIPMENT = "SHIPMENT";
     public static final String ACTION_VOID = "VOID";
+    /** 出库/作废之后补的备注和照片，不动明细也不动库存 */
+    public static final String ACTION_SUPPLEMENT = "SUPPLEMENT";
 
     /** 摘要列宽 2000，留点余量截断，别让一次批量改动把插入撑失败 */
     private static final int SUMMARY_MAX = 1900;
@@ -96,6 +102,48 @@ public class ShipmentOrderLogService {
         addIfChanged(changes, "备注", before.getRemark(), after.getRemark());
         addIfChanged(changes, "总数量", number(before.getTotalQuantity()), number(after.getTotalQuantity()));
         addIfChanged(changes, "总金额", number(before.getTotalAmount()), number(after.getTotalAmount()));
+        addImageChange(changes, before.getSupplementImageIds(), after.getSupplementImageIds());
+    }
+
+    /**
+     * 事后补充（只有备注和图片）的差异摘要。没动过就返回 null，调用方据此跳过这次保存。
+     */
+    public String diffSupplement(ShipmentOrder before, ShipmentOrderSupplementBo after) {
+        if (before == null) {
+            return null;
+        }
+        List<String> changes = new ArrayList<>();
+        addIfChanged(changes, "备注", before.getRemark(), after.getRemark());
+        addImageChange(changes, before.getSupplementImageIds(), after.getSupplementImageIds());
+        return changes.isEmpty() ? null : String.join("；", changes);
+    }
+
+    /**
+     * 图片只报张数和「换没换」。OSS id 写进历史没人看得懂，真要看图去单据上看。
+     */
+    private void addImageChange(List<String> changes, String before, String after) {
+        Set<String> b = imageIds(before);
+        Set<String> a = imageIds(after);
+        if (b.equals(a)) {
+            return;
+        }
+        if (b.size() != a.size()) {
+            changes.add("补充图片 " + b.size() + " 张 → " + a.size() + " 张");
+        } else {
+            changes.add("补充图片 已更换（" + a.size() + " 张）");
+        }
+    }
+
+    private Set<String> imageIds(String value) {
+        if (StringUtils.isBlank(value)) {
+            return Collections.emptySet();
+        }
+        Set<String> ids = new LinkedHashSet<>();
+        Arrays.stream(value.split(","))
+            .map(StringUtils::trimToEmpty)
+            .filter(StringUtils::isNotBlank)
+            .forEach(ids::add);
+        return ids;
     }
 
     /**

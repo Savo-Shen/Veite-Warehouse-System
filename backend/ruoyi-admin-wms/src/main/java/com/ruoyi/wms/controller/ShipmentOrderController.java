@@ -13,6 +13,7 @@ import com.ruoyi.common.mybatis.core.page.PageQuery;
 import com.ruoyi.common.mybatis.core.page.TableDataInfo;
 import com.ruoyi.common.web.core.BaseController;
 import com.ruoyi.wms.domain.bo.ShipmentOrderBo;
+import com.ruoyi.wms.domain.bo.ShipmentOrderSupplementBo;
 import com.ruoyi.wms.domain.vo.ShipmentOrderLogVo;
 import com.ruoyi.wms.domain.vo.ShipmentOrderVo;
 import com.ruoyi.wms.service.ShipmentOrderLogService;
@@ -103,6 +104,19 @@ public class ShipmentOrderController extends BaseController {
     @PutMapping()
     public R<Void> edit(@Validated(EditGroup.class) @RequestBody ShipmentOrderBo bo) {
         shipmentOrderService.updateByBo(bo);
+        return R.ok();
+    }
+
+    /**
+     * 事后补充备注和现场照片。出库/作废后的单子整单锁死，但这两样不碰库存和金额，
+     * 单开一条只认这两个字段的口子，每次改动都记进变更历史。
+     */
+    @SaCheckPermission("wms:shipment:all")
+    @Log(title = "出库单", businessType = BusinessType.UPDATE)
+    @RepeatSubmit()
+    @PutMapping("/supplement")
+    public R<Void> supplement(@Validated @RequestBody ShipmentOrderSupplementBo bo) {
+        shipmentOrderService.supplement(bo);
         return R.ok();
     }
 
