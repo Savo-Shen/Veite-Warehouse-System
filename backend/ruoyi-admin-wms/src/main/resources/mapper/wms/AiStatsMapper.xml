@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.wms.ai.mapper.AiStatsMapper">
+
+    <!--
+      出入库明细聚合。只算已出库/已入库（order_status = 1）的单据；
+      金额按明细金额，缺金额的行按当前售价（出库）/进价（入库）补算，与看板口径一致；
+      成本一律按商品当前进价（明细表的 cost_price 历史上没填过）。
+    -->
+    <select id="selectStats" resultType="java.util.LinkedHashMap">
+        select
+        <choose>
+            <when test="groupBy == 'merchant'">
+                coalesce(m.id, 0) as groupId, coalesce(m.merchant_name, '（未填对方）') as groupName,
+            </when>
+            <when test="groupBy == 'item'">
+                item.id as groupId, item.item_name as groupName,
+            </when>
+            <when test="groupBy == 'sku'">
+                sku.id as groupId, concat(coalesce(item.item_name, ''), ' ', coalesce(sku.sku_name, '')) as groupName,
+            </when>
+            <when test="groupBy == 'category'">
+                cat.id as groupId, coalesce(cat.category_name, '（未分类）') as groupName,
+            </when>
+            <when test="groupBy == 'month'">
+                date_format(o.biz_date, '%Y-%m') as groupId, date_format(o.biz_date, '%Y-%m') as groupName,
+            </when>
+            <when test="groupBy == 'day'">
+                o.biz_date as groupId, date_format(o.biz_date, '%Y-%m-%d') as groupName,
+            </when>
+            <otherwise>
+                '全部' as groupId, '全部' as groupName,
+            </otherwise>
+        </choose>
+            count(distinct o.id) as orderCount,
+            count(d.id) as lineCount,
+            coalesce(sum(d.quantity), 0) as quantity,
+            coalesce(sum(coalesce(d.amount, d.quantity * coalesce(
+                <if test="shipment">sku.selling_price</if><if test="!shipment">sku.cost_price</if>, 0))), 0) as amount,
+            coalesce(sum(d.quantity * coalesce(sku.cost_price, 0)), 0) as costAmount
+        from <if test="shipment">wms_shipment_order_detail</if><if test="!shipment">wms_receipt_order_detail</if> d
+        inner join <if test="shipment">wms_shipment_order</if><if test="!shipment">wms_receipt_order</if> o on d.order_id = o.id
+        left join wms_item_sku sku on d.sku_id = sku.id
+        left join wms_item item on sku.item_id = item.id
+        left join wms_item_category cat on item.item_category = cat.id
+        left join wms_merchant m on o.merchant_id = m.id
+        <where>
+            o.order_status = 1
+            <if test="begin != null and end != null">
+                and o.biz_date between #{begin} and #{end}
+            </if>
+            <if test="merchantIds != null and merchantIds.size() > 0">
+                and o.merchant_id in
+                <foreach collection="merchantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </if>
+            <if test="skuIds != null and skuIds.size() > 0">
+                and d.sku_id in
+                <foreach collection="skuIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </if>
+        </where>
+        <if test="groupBy != null and groupBy != 'none'">
+            group by groupId, groupName
+        </if>
+        order by
+        <choose>
+            <when test="sort == 'quantity'">quantity desc</when>
+            <when test="sort == 'time'">groupId asc</when>
+            <otherwise>amount desc</otherwise>
+        </choose>
+        limit #{limit}
+    </select>
+</mapper>

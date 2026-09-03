@@ -22,6 +22,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * AI 助手接口。运行在登录态下，工具经由现有 Service 调用，会话/消息按用户隔离。
@@ -37,6 +38,8 @@ public class AiAgentController {
 
     private final AgentOrchestrator agentOrchestrator;
     private final AiConversationService conversationService;
+    private final AiActionService actionService;
+    private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper;
 
     /**
@@ -50,14 +53,16 @@ public class AiAgentController {
         conversationService.appendMessage(conv.getId(), "user", request.getMessage(), null, null, null);
 
         long t0 = System.currentTimeMillis();
-        AgentOrchestrator.AgentResult result = agentOrchestrator.chat(request.getMessage(), history);
+        AgentOrchestrator.AgentResult result = agentOrchestrator.chat(request.getMessage(), history,
+            toolRegistry.grantedPermissions(), request.getMode());
         long elapsedMs = System.currentTimeMillis() - t0;
 
         String toolTraceJson = toJson(result.toolTrace());
         String draftJson = result.draft() == null ? null : toJson(result.draft());
-        conversationService.appendMessage(conv.getId(), "assistant", result.reply(), toolTraceJson, draftJson, elapsedMs);
+        Long messageId = conversationService.appendMessage(conv.getId(), "assistant", result.reply(), toolTraceJson, draftJson, elapsedMs);
 
-        return R.ok(new ChatResponse(result.reply(), result.toolTrace(), result.draft(), conv.getId(), elapsedMs));
+        return R.ok(new ChatResponse(result.reply(), result.toolTrace(), result.draft(), conv.getId(), elapsedMs,
+            messageId, result.model()));
     }
 
     /**
@@ -66,14 +71,16 @@ public class AiAgentController {
      */
     @PostMapping("/chat/stream")
     public SseEmitter chatStream(@Validated @RequestBody ChatRequest request) {
-        // 在请求线程取用户（sa-token 是 ThreadLocal，异步线程取不到），传入工作线程
+        // 在请求线程取用户和权限快照（sa-token 是 ThreadLocal，异步线程取不到），传入工作线程
         Long userId = LoginHelper.getUserId();
-        SseEmitter emitter = new SseEmitter(180_000L);
-        ThreadUtil.execute(() -> streamChat(request, userId, emitter));
+        Set<String> granted = toolRegistry.grantedPermissions();
+        // 复杂任务可能串好几次模型调用，给足时间；前端有自己的中断按钮
+        SseEmitter emitter = new SseEmitter(600_000L);
+        ThreadUtil.execute(() -> streamChat(request, userId, granted, emitter));
         return emitter;
     }
 
-    private void streamChat(ChatRequest request, Long userId, SseEmitter emitter) {
+    private void streamChat(ChatRequest request, Long userId, Set<String> granted, SseEmitter emitter) {
         try {
             AiConversation conv = conversationService.getOrCreate(request.getConversationId(), request.getMessage(), userId);
             emitter.send(SseEmitter.event().name("meta").data(Map.of("conversationId", conv.getId())));
@@ -83,7 +90,7 @@ public class AiAgentController {
 
             long t0 = System.currentTimeMillis();
             AgentOrchestrator.AgentResult result = agentOrchestrator.chatStream(
-                request.getMessage(), history,
+                request.getMessage(), history, granted, request.getMode(),
                 new AgentOrchestrator.StreamSink() {
                     @Override
                     public void onStatus(String status) {
@@ -99,10 +106,11 @@ public class AiAgentController {
 
             String toolTraceJson = toJson(result.toolTrace());
             String draftJson = result.draft() == null ? null : toJson(result.draft());
-            conversationService.appendMessage(conv.getId(), "assistant", result.reply(), toolTraceJson, draftJson, elapsedMs);
+            Long messageId = conversationService.appendMessage(conv.getId(), "assistant", result.reply(), toolTraceJson, draftJson, elapsedMs);
 
             emitter.send(SseEmitter.event().name("done")
-                .data(new ChatResponse(result.reply(), result.toolTrace(), result.draft(), conv.getId(), elapsedMs)));
+                .data(new ChatResponse(result.reply(), result.toolTrace(), result.draft(), conv.getId(), elapsedMs,
+                    messageId, result.model())));
             emitter.complete();
         } catch (Exception e) {
             log.warn("AI 流式对话失败: {}", e.getMessage());
@@ -117,6 +125,15 @@ public class AiAgentController {
         } catch (Exception e) {
             // 客户端可能已断开，忽略
         }
+    }
+
+    /**
+     * 执行某条助手消息里的“待确认操作”（库位调整、新建往来单位、新建商品/补规格）。
+     * 只有消息所属会话的主人能执行，且每条只能执行一次。
+     */
+    @PostMapping("/actions/{messageId}/execute")
+    public R<Map<String, Object>> executeAction(@PathVariable Long messageId) {
+        return R.ok(actionService.execute(messageId));
     }
 
     /** 我的会话列表 */
@@ -156,9 +173,12 @@ public class AiAgentController {
         private String message;
         /** 续聊的会话ID；为空则新建会话 */
         private Long conversationId;
+        /** 模型档位：fast（默认）/ strong */
+        private String mode;
     }
 
-    /** 对话返回：回复 + 工具轨迹 + 草稿 + 会话ID + 耗时 */
-    public record ChatResponse(String reply, Object toolTrace, Object draft, Long conversationId, Long elapsedMs) {
+    /** 对话返回：回复 + 工具轨迹 + 草稿 + 会话ID + 耗时 + 助手消息ID + 所用模型 */
+    public record ChatResponse(String reply, Object toolTrace, Object draft, Long conversationId, Long elapsedMs,
+                               Long messageId, String model) {
     }
 }

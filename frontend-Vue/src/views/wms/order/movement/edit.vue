@@ -371,10 +371,49 @@ onMounted(() => {
   const id = route.query && route.query.id;
   if (id) {
     loadDetail(id)
+  } else if (route.query && route.query.fromAi) {
+    prefillFromAiDraft()
   } else {
     form.value.orderNo = 'YK' + generateNo()
   }
 })
+
+/** 由 AI 草稿预填移库单（不直接保存，等用户确认） */
+const prefillFromAiDraft = () => {
+  let draft = null
+  try {
+    draft = JSON.parse(sessionStorage.getItem('wms_ai_movement_draft') || 'null')
+  } catch (e) { /* ignore */ }
+  sessionStorage.removeItem('wms_ai_movement_draft')
+
+  form.value.orderNo = 'YK' + generateNo()
+  if (!draft || draft.type !== 'movement') {
+    return
+  }
+  if (draft.sourceWarehouseId) form.value.sourceWarehouseId = String(draft.sourceWarehouseId)
+  if (draft.targetWarehouseId) form.value.targetWarehouseId = String(draft.targetWarehouseId)
+  if (draft.remark) form.value.remark = draft.remark
+  form.value.details = (draft.details || []).filter(d => d.skuId).map(d => ({
+    itemSku: d.itemSku || {},
+    item: d.item || {},
+    skuId: String(d.skuId),
+    quantity: d.quantity != null ? Number(d.quantity) : undefined,
+    amount: undefined,
+    sourceWarehouseId: form.value.sourceWarehouseId,
+    targetWarehouseId: form.value.targetWarehouseId,
+  }))
+  selectedInventory.value = form.value.details.map(d => ({ skuId: d.skuId, warehouseId: d.sourceWarehouseId }))
+  inventorySelectRef.value?.setWarehouseId?.(form.value.sourceWarehouseId)
+  handleChangeQuantity()
+
+  const tips = [...(draft.warnings || [])]
+  ;(draft.unresolved || []).forEach(u => tips.push(`未匹配到商品：${u.name}（需手动添加）`))
+  if (tips.length) {
+    ElMessage.warning({ message: 'AI 草稿提示：\n' + tips.join('\n'), duration: 8000 })
+  } else {
+    ElMessage.success('已根据 AI 草稿预填，请核对后保存或移库')
+  }
+}
 
 
 // 获取移库单详情

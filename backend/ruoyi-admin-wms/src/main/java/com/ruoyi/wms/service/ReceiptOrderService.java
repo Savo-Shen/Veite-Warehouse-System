@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 // import java.util.Map;
 import java.util.Objects;
 
@@ -105,6 +106,9 @@ public class ReceiptOrderService {
         lqw.eq(bo.getMerchantId() != null, ReceiptOrder::getMerchantId, bo.getMerchantId());
         lqw.eq(bo.getTotalAmount() != null, ReceiptOrder::getTotalAmount, bo.getTotalAmount());
         lqw.eq(bo.getOrderStatus() != null, ReceiptOrder::getOrderStatus, bo.getOrderStatus());
+        Map<String, Object> params = bo.getParams();
+        lqw.between(params != null && params.get("beginTime") != null && params.get("endTime") != null,
+            ReceiptOrder::getBizDate, params == null ? null : params.get("beginTime"), params == null ? null : params.get("endTime"));
         // 按业务日期倒序，同一天内再按录入时间，补录的单子会落回它该在的位置
         lqw.orderByDesc(ReceiptOrder::getBizDate);
         lqw.orderByDesc(ReceiptOrder::getCreateTime);

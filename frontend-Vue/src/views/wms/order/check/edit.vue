@@ -406,10 +406,50 @@ onMounted(() => {
   if (id) {
     checking.value = true
     loadDetail(id)
+  } else if (route.query && route.query.fromAi) {
+    prefillFromAiDraft()
   } else {
     form.value.orderNo = 'PK' + generateNo()
   }
 })
+
+/** 由 AI 草稿预填盘点单：账面数、实盘数都带进来，用户核对后再保存 */
+const prefillFromAiDraft = () => {
+  let draft = null
+  try {
+    draft = JSON.parse(sessionStorage.getItem('wms_ai_check_draft') || 'null')
+  } catch (e) { /* ignore */ }
+  sessionStorage.removeItem('wms_ai_check_draft')
+
+  form.value.orderNo = 'PK' + generateNo()
+  if (!draft || draft.type !== 'check') {
+    return
+  }
+  if (draft.warehouseId) form.value.warehouseId = String(draft.warehouseId)
+  if (draft.remark) form.value.remark = draft.remark
+  form.value.details = (draft.details || []).filter(d => d.skuId).map(d => ({
+    itemSku: d.itemSku || {},
+    item: d.item || {},
+    location: d.location,
+    inventoryId: d.inventoryId != null ? String(d.inventoryId) : null,
+    skuId: String(d.skuId),
+    warehouseId: form.value.warehouseId,
+    quantity: Number(d.quantity || 0),
+    checkQuantity: Number(d.checkQuantity || 0),
+    newInventory: !d.inventoryId
+  }))
+  selectedSku.value = form.value.details.map(d => ({ id: d.skuId }))
+  selectedInventory.value = form.value.details.filter(d => d.inventoryId).map(d => ({ skuId: d.skuId, warehouseId: d.warehouseId }))
+  handleChangeQuantity()
+
+  const tips = [...(draft.warnings || [])]
+  ;(draft.unresolved || []).forEach(u => tips.push(`未匹配到商品：${u.name}（需手动添加）`))
+  if (tips.length) {
+    ElMessage.warning({ message: 'AI 草稿提示：\n' + tips.join('\n'), duration: 8000 })
+  } else {
+    ElMessage.success('已根据 AI 草稿预填账面数和实盘数，请核对后保存')
+  }
+}
 
 
 // 获取入库单详情

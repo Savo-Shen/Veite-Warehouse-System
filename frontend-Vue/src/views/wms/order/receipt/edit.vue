@@ -564,17 +564,29 @@ const prefillFromAiDraft = () => {
   if (draft.warehouseId) form.value.warehouseId = String(draft.warehouseId)
   if (draft.merchantId) form.value.merchantId = String(draft.merchantId)
   if (draft.optType) form.value.optType = String(draft.optType)
+  if (draft.bizDate) form.value.bizDate = draft.bizDate
   if (draft.bizOrderNo) form.value.bizOrderNo = draft.bizOrderNo
   if (draft.remark) form.value.remark = draft.remark
 
-  form.value.details = (draft.details || []).map(d => ({
+  form.value.details = (draft.details || []).filter(d => d.skuId || (d.itemSku && d.itemSku.id)).map(d => ({
     item: d.item || {},
     itemSku: d.itemSku || {},
+    skuId: d.skuId != null ? String(d.skuId) : (d.itemSku && d.itemSku.id != null ? String(d.itemSku.id) : undefined),
     quantity: d.quantity,
     amount: d.amount,
+    remark: d.remark || undefined,
     warehouseId: form.value.warehouseId,
+    _aiPrice: hasValue(d.price) ? Number(d.price) : undefined,
+    _aiNoPrice: !hasValue(d.price) && !hasValue(d.amount),
   }))
   restorePriceFromAmount(form.value.details)
+  // 草稿里带了单价（售价/来源单价/用户指定）就按它来；AI 明确说没登记进价的行留空让人填
+  form.value.details.forEach(d => {
+    if (hasValue(d._aiPrice)) d.price = d._aiPrice
+    else if (d._aiNoPrice) d.price = undefined
+    delete d._aiPrice
+    delete d._aiNoPrice
+  })
   selectedSku.value = form.value.details
     .filter(d => d.itemSku && d.itemSku.id)
     .map(d => ({ id: d.itemSku.id }))
@@ -590,6 +602,60 @@ const prefillFromAiDraft = () => {
   }
 }
 
+
+/**
+ * AI 改单草稿：单据加载好之后，把 AI 提议的改动（数量、单价、新增行、备注）叠上去。
+ * 只改表单，用户核对后自己点保存；已保存的明细行不在这里删（删除要走接口），只提示。
+ */
+const applyAiEdit = () => {
+  if (!(route.query && route.query.fromAi)) return
+  let draft = null
+  try {
+    draft = JSON.parse(sessionStorage.getItem('wms_ai_receipt_draft') || 'null')
+  } catch (e) { /* ignore */ }
+  if (!draft || draft.mode !== 'edit' || String(draft.orderId) !== String(form.value.id)) return
+  sessionStorage.removeItem('wms_ai_receipt_draft')
+
+  const tips = [...(draft.warnings || [])]
+  if (draft.remark != null) form.value.remark = draft.remark
+  if (draft.bizDate) form.value.bizDate = draft.bizDate
+
+  const existing = form.value.details || []
+  const kept = new Set()
+  const next = []
+  ;(draft.details || []).forEach(d => {
+    const found = d.id != null ? existing.find(it => String(it.id) === String(d.id)) : null
+    if (found) {
+      kept.add(String(found.id))
+      if (hasValue(d.quantity)) found.quantity = Number(d.quantity)
+      if (hasValue(d.price)) found.price = Number(d.price)
+      if (d.remark != null) found.remark = d.remark
+      next.push(found)
+    } else if (d.skuId) {
+      next.push({
+        item: d.item || {},
+        itemSku: d.itemSku || {},
+        skuId: String(d.skuId),
+        quantity: hasValue(d.quantity) ? Number(d.quantity) : 1,
+        price: hasValue(d.price) ? Number(d.price) : undefined,
+        amount: undefined,
+        remark: d.remark || undefined,
+        warehouseId: form.value.warehouseId,
+      })
+    }
+  })
+  const removed = existing.filter(it => it.id != null && !kept.has(String(it.id)))
+  if (removed.length) {
+    removed.forEach(it => next.push(it))
+    tips.push('AI 建议删除：' + removed.map(it => it.item?.itemName || '').join('、') + '，请手动点「删除」')
+  }
+  form.value.details = next
+  selectedSku.value = next.filter(d => d.itemSku && d.itemSku.id).map(d => ({ id: d.itemSku.id }))
+  handleChangeQuantity()
+  handleAutoCalc()
+  ;(draft.unresolved || []).forEach(u => tips.push(`没找到对应的行：${u.name}`))
+  ElMessage.warning({ message: 'AI 改单草稿已叠加到这张单上，请核对后保存：\n' + tips.join('\n'), duration: 10000 })
+}
 
 // 获取入库单详情
 const loadDetail = (id) => {
@@ -609,6 +675,7 @@ const loadDetail = (id) => {
         }
       })
     }
+    applyAiEdit()
     Promise.resolve();
   }).then(() => {
   }).finally(() => {

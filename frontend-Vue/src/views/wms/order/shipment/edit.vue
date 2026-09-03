@@ -953,19 +953,28 @@ const prefillFromAiDraft = () => {
   }
   if (draft.warehouseId) form.value.warehouseId = String(draft.warehouseId)
   if (draft.merchantId) form.value.merchantId = String(draft.merchantId)
+  if (draft.optType) form.value.optType = String(draft.optType)
+  if (draft.bizDate) form.value.bizDate = draft.bizDate
+  if (draft.bizOrderNo) form.value.bizOrderNo = draft.bizOrderNo
   if (draft.remark) form.value.remark = draft.remark
 
   const wid = form.value.warehouseId
-  form.value.details = (draft.details || []).map(d => ({
+  form.value.details = (draft.details || []).filter(d => d.skuId).map(d => ({
     item: d.item || {},
     itemSku: d.itemSku || {},
-    skuId: d.skuId != null ? String(d.skuId) : d.skuId,
+    skuId: String(d.skuId),
     quantity: d.quantity,
     amount: d.amount,
+    // 草稿里带了单价（进价/上次价/用户指定）就按它来；没带就让 restorePriceFromAmount 退回售价
+    salePrice: hasValue(d.price) ? Number(d.price) : (hasValue(d.salePrice) ? Number(d.salePrice) : undefined),
+    remark: d.remark || undefined,
     warehouseId: wid,
     inventoryId: undefined,
+    _aiNoPrice: !hasValue(d.price) && !hasValue(d.salePrice) && !hasValue(d.amount),
   }))
   restorePriceFromAmount(form.value.details)
+  // AI 明确说“没登记这种价”的行，单价留空让人填，别悄悄退回售价
+  form.value.details.forEach(d => { if (d._aiNoPrice) { d.price = undefined; d.salePrice = undefined } delete d._aiNoPrice })
   selectedInventory.value = form.value.details
     .filter(d => d.skuId)
     .map(d => ({ skuId: d.skuId, warehouseId: d.warehouseId }))
@@ -984,6 +993,82 @@ const prefillFromAiDraft = () => {
   }
 }
 
+
+/**
+ * AI 改单草稿：单据已经按原样加载好之后，把 AI 提议的改动（数量、单价、增删行、备注）叠上去。
+ * 只改表单，用户核对后自己点保存；已保存的明细行不在这里删（删除要走接口），只提示。
+ */
+const applyAiEdit = () => {
+  if (!(route.query && route.query.fromAi)) return
+  let draft = null
+  try {
+    draft = JSON.parse(sessionStorage.getItem('wms_ai_shipment_draft') || 'null')
+  } catch (e) { /* ignore */ }
+  if (!draft || draft.mode !== 'edit' || String(draft.orderId) !== String(form.value.id)) return
+  sessionStorage.removeItem('wms_ai_shipment_draft')
+
+  const tips = [...(draft.warnings || [])]
+  if (draft.remark != null) form.value.remark = draft.remark
+  if (draft.bizDate) form.value.bizDate = draft.bizDate
+
+  const existing = form.value.details || []
+  const kept = new Set()
+  const next = []
+  ;(draft.details || []).forEach(d => {
+    const found = d.id != null ? existing.find(it => String(it.id) === String(d.id)) : null
+    if (found) {
+      kept.add(String(found.id))
+      if (hasValue(d.quantity)) found.quantity = Number(d.quantity)
+      if (form.value.recordOnly) {
+        if (hasValue(d.price)) found.salePrice = Number(d.price)
+      } else if (hasValue(d.price)) {
+        found.price = Number(d.price)
+      }
+      if (d.remark != null) found.remark = d.remark
+      next.push(found)
+    } else if (form.value.recordOnly) {
+      next.push({
+        rowKey: nextRowKey(),
+        itemName: d.itemName || d.item?.itemName || '',
+        quantity: hasValue(d.quantity) ? Number(d.quantity) : 1,
+        costPrice: undefined,
+        salePrice: hasValue(d.price) ? Number(d.price) : undefined,
+        amount: undefined,
+        remark: d.remark || undefined,
+      })
+    } else if (d.skuId) {
+      next.push({
+        item: d.item || {},
+        itemSku: d.itemSku || {},
+        skuId: String(d.skuId),
+        quantity: hasValue(d.quantity) ? Number(d.quantity) : 1,
+        price: hasValue(d.price) ? Number(d.price) : undefined,
+        amount: undefined,
+        remark: d.remark || undefined,
+        warehouseId: form.value.warehouseId,
+        inventoryId: null,
+      })
+    }
+  })
+  const removed = existing.filter(it => it.id != null && !kept.has(String(it.id)))
+  if (removed.length && !form.value.recordOnly) {
+    // 正常出库单的已存行要走删除接口，这里不替用户做，保留并提示
+    removed.forEach(it => next.push(it))
+    tips.push('AI 建议删除：' + removed.map(it => it.item?.itemName || it.itemName || '').join('、') + '，请手动点「删除」')
+  } else if (removed.length) {
+    tips.push('已按 AI 建议去掉 ' + removed.length + ' 行，保存后生效')
+  }
+  form.value.details = next
+  if (form.value.recordOnly) {
+    handleChangeRecordPrice()
+  } else {
+    selectedInventory.value = next.filter(d => d.skuId).map(d => ({ id: d.id, skuId: d.skuId, warehouseId: d.warehouseId }))
+    handleChangeQuantity()
+    handleAutoCalc()
+  }
+  ;(draft.unresolved || []).forEach(u => tips.push(`没找到对应的行：${u.name}`))
+  ElMessage.warning({ message: 'AI 改单草稿已叠加到这张单上，请核对后保存：\n' + tips.join('\n'), duration: 10000 })
+}
 
 // 获取入库单详情
 const loadDetail = (id) => {
@@ -1014,12 +1099,14 @@ const loadDetail = (id) => {
         }
       })
       handleChangeRecordPrice()
+      applyAiEdit()
       return
     }
     // 单价没有单独入库，用已保存的金额/数量还原，否则会退回规格默认售价
     restorePriceFromAmount(form.value.details)
     inventorySelectRef.value.setWarehouseId(form.value.warehouseId)
     loadLastPrices()
+    applyAiEdit()
     Promise.resolve();
   }).then(() => {
   }).finally(() => {

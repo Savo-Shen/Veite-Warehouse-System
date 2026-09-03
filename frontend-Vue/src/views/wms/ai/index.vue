@@ -47,7 +47,7 @@
               <span class="title">用一句话处理仓库任务</span>
               <small class="only-mobile">查库存、查价格、生成出入库草稿</small>
             </div>
-            <span class="hint hide-mobile">试试：「气管多少钱」「查一下PU管库存」「卖给客户A气管10米」</span>
+            <span class="hint hide-mobile">试试：「气管多少钱」「这个月出了多少钱」「把 CK08054357 复制一张，单价改成进价」「盘点：SDA32*20 实际 40 个」</span>
             <div class="mobile-header-actions only-mobile">
               <el-button class="header-action" icon="ChatDotRound" @click="newChat">新对话</el-button>
               <el-button class="header-action primary" icon="Menu" @click="showSidebar = !showSidebar">历史</el-button>
@@ -57,7 +57,7 @@
           <div ref="msgListRef" class="msg-list" v-loading="historyLoading">
             <div v-if="!messages.length" class="empty">
               <div class="empty-title">今天要处理什么？</div>
-              <p>我可以帮你查商品价格、库存，也可以先生成入库/出库草稿，确认后再保存。</p>
+              <p>我可以查价格、库存、往来单位、单据和出入库历史；也能生成出入库草稿、复制已有单据、改单价或改数量，都由你核对后再保存。</p>
               <div class="quick-prompts">
                 <button v-for="item in quickPrompts" :key="item" type="button" @click="usePrompt(item)">
                   {{ item }}
@@ -68,7 +68,11 @@
             <div v-for="(m, i) in messages" :key="i" class="msg-row" :class="m.role">
               <div class="bubble">
                 <span v-if="m.streaming && !m.content" class="typing">{{ m.statusText || ('正在思考… ' + thinkingText + 's') }}</span>
-                <div v-else class="text"><span v-text="m.content"></span><span v-if="m.streaming" class="caret">▌</span></div>
+                <div v-else-if="m.role === 'assistant'" class="text md">
+                  <span v-html="renderMarkdown(m.content)"></span><span v-if="m.streaming" class="caret">▌</span>
+                  <div v-if="m.streaming && m.statusText" class="status-line">{{ m.statusText }}</div>
+                </div>
+                <div v-else class="text"><span v-text="m.content"></span></div>
                 <el-collapse v-if="m.toolTrace && m.toolTrace.length" class="trace">
                   <el-collapse-item :title="`AI 调用了 ${m.toolTrace.length} 个工具（点击查看）`">
                     <div v-for="(t, ti) in m.toolTrace" :key="ti" class="trace-item">
@@ -82,8 +86,36 @@
                     {{ draftActionText(m.draft) }}
                   </el-button>
                 </div>
+                <div v-else-if="isActionDraft(m.draft)" class="action-card" :class="{ done: m.draft.executed }">
+                  <div class="action-title">{{ m.draft.title || '待确认操作' }}</div>
+                  <div v-if="m.draft.summary" class="action-summary">
+                    <span v-for="(v, k) in m.draft.summary" :key="k" v-show="v">{{ k }}：{{ v }}</span>
+                  </div>
+                  <div v-if="m.draft.lines && m.draft.lines.length" class="md-table action-lines">
+                    <table>
+                      <thead><tr><th v-for="k in actionColumns(m.draft.lines)" :key="k">{{ k }}</th></tr></thead>
+                      <tbody>
+                        <tr v-for="(row, ri) in m.draft.lines" :key="ri">
+                          <td v-for="k in actionColumns(m.draft.lines)" :key="k">{{ row[k] ?? '' }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div v-if="m.draft.warnings && m.draft.warnings.length" class="action-warn">
+                    <div v-for="(w, wi) in m.draft.warnings" :key="wi">⚠ {{ w }}</div>
+                  </div>
+                  <div class="action-foot">
+                    <template v-if="m.draft.executed">
+                      <el-tag type="success" effect="plain">已执行</el-tag>
+                      <span class="action-result">{{ m.draft.result }}</span>
+                    </template>
+                    <el-button v-else type="warning" icon="Check" :loading="m.executing" :disabled="!m.id" @click="runAction(m)">
+                      确认执行
+                    </el-button>
+                  </div>
+                </div>
                 <div class="msg-meta">
-                  <span v-if="m.elapsedSec" class="elapsed">⏱ 用时 {{ m.elapsedSec }}s</span>
+                  <span v-if="m.elapsedSec" class="elapsed">⏱ 用时 {{ m.elapsedSec }}s<template v-if="m.model">（{{ modelLabel(m.model) }}）</template></span>
                   <el-button class="copy-btn" link size="small" icon="CopyDocument" @click="copyText(m.content)">复制</el-button>
                 </div>
               </div>
@@ -102,6 +134,10 @@
               @keydown="onKeydown"
             />
             <div class="input-actions">
+              <el-radio-group v-model="aiMode" size="small" class="mode-switch" :title="'快：' + fastHint + '；强：' + strongHint">
+                <el-radio-button label="fast">快</el-radio-button>
+                <el-radio-button label="strong">强</el-radio-button>
+              </el-radio-group>
               <el-button
                 v-if="speechSupported"
                 class="mic-btn"
@@ -111,7 +147,8 @@
                 :title="recognizing ? '点击停止' : '语音输入'"
                 @click="toggleVoice"
               >语音</el-button>
-              <el-button class="send-btn" type="primary" :loading="loading" @click="send">发送</el-button>
+              <el-button v-if="loading" class="send-btn" type="danger" plain @click="stopStream">停止</el-button>
+              <el-button v-else class="send-btn" type="primary" @click="send">发送</el-button>
             </div>
           </div>
         </section>
@@ -121,10 +158,10 @@
 </template>
 
 <script setup name="WmsAiAssistant">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { aiChatStream, listConversations, getConversationMessages, deleteConversation } from '@/api/wms/ai'
+import { aiChatStream, listConversations, getConversationMessages, deleteConversation, executeAiAction } from '@/api/wms/ai'
 import useUserStore from '@/store/modules/user'
 
 const router = useRouter()
@@ -145,6 +182,19 @@ const inputPlaceholder = computed(() => {
 
 const conversations = ref([])
 const currentId = ref(null)
+
+/* ---------- 快 / 强 双模型 ---------- */
+const fastHint = '日常查询、建单，几秒出结果'
+const strongHint = '多步推理、长清单、复杂改单，更稳但更慢'
+const readMode = () => { try { return localStorage.getItem('wms_ai_mode') === 'strong' ? 'strong' : 'fast' } catch (e) { return 'fast' } }
+const aiMode = ref(readMode())
+watch(aiMode, (v) => { try { localStorage.setItem('wms_ai_mode', v) } catch (e) { /* ignore */ } })
+const modelLabel = (model) => {
+  if (!model) return ''
+  const m = String(model)
+  if (/pro|strong|max/i.test(m)) return '强 · ' + m
+  return '快 · ' + m
+}
 const showSidebar = ref(false)   // 移动端会话抽屉
 const goMobile = (type) => router.push({ path: '/mobile', query: { type } })
 const handleMobileCommand = (command) => {
@@ -161,9 +211,11 @@ const handleMobileCommand = (command) => {
 }
 const quickPrompts = [
   '查一下PU管库存',
-  '气管多少钱',
-  '卖给客户A气管10米',
-  '采购入库PU管20件'
+  '库存低于 10 的商品有哪些',
+  '把 CK08054357 复制一张，单价改成进价',
+  '这个月哪个客户买得最多',
+  '接一根四分两层 1米2，两头 22×1.5 A型芯，多少钱',
+  '给约克报个价：PC08-02 接头 200 个'
 ]
 
 const usePrompt = (text) => {
@@ -239,10 +291,11 @@ const mapPersistedMessage = (m) => {
   }
   const draft = safeParse(m.draft)
   return {
+    id: m.id,
     role: m.role,
     content: m.content,
     toolTrace: safeParse(m.toolTrace) || [],
-    draft: isOrderDraft(draft) ? draft : null,
+    draft: isOrderDraft(draft) || isActionDraft(draft) ? draft : null,
     elapsedSec: m.elapsedMs ? (m.elapsedMs / 1000).toFixed(1) : undefined
   }
 }
@@ -260,6 +313,59 @@ const startThinking = () => {
 const stopThinking = () => { if (timer) { clearInterval(timer); timer = null } }
 const elapsedSec = () => ((performance.now() - startTs) / 1000).toFixed(1)
 onUnmounted(stopThinking)
+
+/* ---------- Markdown（表格/加粗/列表/代码），先转义再渲染 ---------- */
+const escapeHtml = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const inlineMd = (s) => s
+  .replace(/`([^`]+)`/g, '<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+  .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>')
+const renderMarkdown = (text) => {
+  const lines = escapeHtml(text).split('\n')
+  const out = []
+  let i = 0
+  const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l)
+  const isSepRow = (l) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l)
+  while (i < lines.length) {
+    const line = lines[i]
+    if (/^\s*```/.test(line)) {
+      const buf = []
+      i++
+      while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++])
+      i++
+      out.push('<pre><code>' + buf.join('\n') + '</code></pre>')
+      continue
+    }
+    if (isTableRow(line) && i + 1 < lines.length && isSepRow(lines[i + 1])) {
+      const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => inlineMd(c.trim()))
+      let html = '<div class="md-table"><table><thead><tr>' + cells(line).map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>'
+      i += 2
+      while (i < lines.length && isTableRow(lines[i])) {
+        html += '<tr>' + cells(lines[i]).map(c => `<td>${c}</td>`).join('') + '</tr>'
+        i++
+      }
+      out.push(html + '</tbody></table></div>')
+      continue
+    }
+    const h = /^\s*(#{1,6})\s+(.*)$/.exec(line)
+    if (h) { out.push(`<div class="md-h">${inlineMd(h[2])}</div>`); i++; continue }
+    if (/^\s*([-*•]|\d+[.、)])\s+/.test(line)) {
+      const ordered = /^\s*\d+[.、)]\s+/.test(line)
+      const items = []
+      while (i < lines.length && /^\s*([-*•]|\d+[.、)])\s+/.test(lines[i])) {
+        items.push('<li>' + inlineMd(lines[i].replace(/^\s*([-*•]|\d+[.、)])\s+/, '')) + '</li>')
+        i++
+      }
+      out.push((ordered ? '<ol>' : '<ul>') + items.join('') + (ordered ? '</ol>' : '</ul>'))
+      continue
+    }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { out.push('<hr>'); i++; continue }
+    out.push(line.trim() === '' ? '<div class="md-gap"></div>' : `<div>${inlineMd(line)}</div>`)
+    i++
+  }
+  return out.join('')
+}
 
 /* ---------- 复制 ---------- */
 const copyText = async (text) => {
@@ -362,28 +468,69 @@ const toggleVoice = () => {
 onUnmounted(() => { try { recognition && recognition.abort() } catch (e) { /* ignore */ } })
 
 /* ---------- 草稿 ---------- */
-const isOrderDraft = (draft) => draft && ['shipment', 'receipt'].includes(draft.type)
+const ORDER_DRAFTS = {
+  shipment: { name: '出库单', path: '/shipmentOrderEdit', key: 'wms_ai_shipment_draft', partner: '客户' },
+  receipt: { name: '入库单', path: '/receiptOrderEdit', key: 'wms_ai_receipt_draft', partner: '供应商' },
+  movement: { name: '移库单', path: '/movementOrderEdit', key: 'wms_ai_movement_draft' },
+  check: { name: '盘点单', path: '/checkOrderEdit', key: 'wms_ai_check_draft' }
+}
+const isOrderDraft = (draft) => !!(draft && ORDER_DRAFTS[draft.type])
+const isActionDraft = (draft) => !!(draft && draft.type === 'action')
 const draftActionText = (draft) => {
-  const orderName = draft.type === 'receipt' ? '入库单' : '出库单'
-  const partnerName = draft.type === 'receipt' ? '供应商' : '客户'
-  const merchantText = draft.merchantName ? `，${partnerName}：${draft.merchantName}` : ''
-  return `去确认并创建${orderName}（${(draft.details || []).length} 项${merchantText}）`
+  const cfg = ORDER_DRAFTS[draft.type]
+  const count = (draft.details || []).length
+  if (draft.type === 'movement') {
+    return `去确认并创建移库单（${count} 项，${draft.sourceWarehouseName || ''} → ${draft.targetWarehouseName || ''}）`
+  }
+  if (draft.type === 'check') {
+    return `去核对并保存盘点单（${count} 项，${draft.warehouseName || ''}）`
+  }
+  const merchantText = draft.merchantName ? `，${cfg.partner}：${draft.merchantName}` : ''
+  if (draft.mode === 'edit' && draft.orderId) {
+    return `去核对并保存对${cfg.name} ${draft.orderNo || ''} 的修改（${count} 项${merchantText}）`
+  }
+  const copied = draft.sourceOrderNo ? `，复制自 ${draft.sourceOrderNo}` : ''
+  return `去确认并创建${cfg.name}（${count} 项${merchantText}${copied}）`
 }
 const goCreateOrder = (draft) => {
-  if (draft.type === 'receipt') {
-    sessionStorage.setItem('wms_ai_receipt_draft', JSON.stringify(draft))
-    router.push({ path: '/receiptOrderEdit', query: { fromAi: '1' } })
-    return
+  const cfg = ORDER_DRAFTS[draft.type]
+  if (!cfg) return
+  sessionStorage.setItem(cfg.key, JSON.stringify(draft))
+  const query = { fromAi: '1' }
+  // 改单草稿：打开原单据的编辑页，编辑页加载完再把改动叠上去
+  if (draft.mode === 'edit' && draft.orderId) query.id = String(draft.orderId)
+  router.push({ path: cfg.path, query })
+}
+
+/* ---------- 待确认操作（建档 / 库位调整） ---------- */
+const actionColumns = (lines) => {
+  const keys = []
+  ;(lines || []).forEach(row => Object.keys(row || {}).forEach(k => { if (k !== 'skuId' && !keys.includes(k)) keys.push(k) }))
+  return keys
+}
+const runAction = async (m) => {
+  if (!m.id || m.executing) return
+  try {
+    await ElMessageBox.confirm(`确定执行「${m.draft.title || '该操作'}」？执行后会直接写入系统。`, '确认执行', { type: 'warning', confirmButtonText: '执行', cancelButtonText: '再看看' })
+  } catch (e) { return }
+  m.executing = true
+  try {
+    const res = await executeAiAction(m.id)
+    if (res.data && res.data.draft) m.draft = res.data.draft
+    else m.draft = { ...m.draft, executed: true, result: res.data && res.data.result }
+    ElMessage.success(res.data && res.data.result ? res.data.result : '已执行')
+  } catch (e) {
+    ElMessage.error((e && e.message) || '执行失败')
+  } finally {
+    m.executing = false
   }
-  sessionStorage.setItem('wms_ai_shipment_draft', JSON.stringify(draft))
-  router.push({ path: '/shipmentOrderEdit', query: { fromAi: '1' } })
 }
 const parseDraftFromTrace = (toolTrace = []) => {
-  const draftTrace = [...toolTrace].reverse().find(t => ['create_shipment_draft', 'create_receipt_draft'].includes(t.tool))
+  const draftTrace = [...toolTrace].reverse().find(t => /_draft$/.test(t.tool || ''))
   if (!draftTrace?.result) return null
   try {
     const parsed = typeof draftTrace.result === 'string' ? JSON.parse(draftTrace.result) : draftTrace.result
-    return isOrderDraft(parsed) ? parsed : null
+    return isOrderDraft(parsed) || isActionDraft(parsed) ? parsed : null
   } catch (e) { return null }
 }
 
@@ -405,9 +552,12 @@ const send = async () => {
   const idx = messages.value.length - 1
   scrollToBottom()
 
-  const finish = () => { stopThinking(); loading.value = false }
+  const finish = () => { stopThinking(); loading.value = false; abortCtrl = null }
+  abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null
 
   await aiChatStream(text, currentId.value, {
+    signal: abortCtrl ? abortCtrl.signal : undefined,
+    mode: aiMode.value,
     onMeta: (d) => { if (d && d.conversationId) currentId.value = d.conversationId },
     onStatus: (s) => { messages.value[idx].statusText = s; scrollToBottom() },
     onDelta: (t) => {
@@ -420,6 +570,8 @@ const send = async () => {
       if (d && d.reply) m.content = d.reply
       m.toolTrace = (d && d.toolTrace) || m.toolTrace || []
       m.draft = (d && d.draft) || parseDraftFromTrace(m.toolTrace)
+      m.id = d && d.messageId
+      m.model = d && d.model
       m.elapsedSec = elapsedSec()
       m.streaming = false
       m.statusText = ''
@@ -437,11 +589,21 @@ const send = async () => {
     }
   })
 
-  // 兜底：流意外结束（既无 done 也无 error）时复位状态
+  // 兜底：流意外结束（既无 done 也无 error）或被用户中断时复位状态
   if (loading.value) {
-    if (messages.value[idx]) { messages.value[idx].streaming = false }
+    const m = messages.value[idx]
+    if (m) {
+      m.streaming = false
+      m.statusText = ''
+      if (!m.content) m.content = '（已停止）'
+    }
     finish()
   }
+}
+
+let abortCtrl = null
+const stopStream = () => {
+  if (abortCtrl) { try { abortCtrl.abort() } catch (e) { /* ignore */ } }
 }
 
 onMounted(() => {
@@ -493,6 +655,33 @@ onUnmounted(() => {
 .bubble { position: relative; max-width: 82%; padding: 10px 14px; border-radius: 10px; background: #f4f4f5; }
 .msg-row.user .bubble { background: #ecf5ff; }
 .text { white-space: pre-wrap; word-break: break-word; }
+.text.md { white-space: normal; line-height: 1.6; }
+.text.md :deep(b) { font-weight: 600; }
+.text.md :deep(code) { background: #eef1f6; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+.text.md :deep(pre) { background: #f4f5f7; padding: 8px 10px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; white-space: pre; }
+.text.md :deep(ul), .text.md :deep(ol) { margin: 4px 0 4px 20px; padding: 0; }
+.text.md :deep(li) { margin: 2px 0; }
+.text.md :deep(.md-h) { font-weight: 600; margin: 8px 0 4px; }
+.text.md :deep(.md-gap) { height: 8px; }
+.text.md :deep(hr) { border: 0; border-top: 1px solid #e5e7eb; margin: 8px 0; }
+.text.md :deep(.md-table) { overflow-x: auto; margin: 6px 0; }
+.text.md :deep(table) { border-collapse: collapse; font-size: 13px; min-width: 60%; }
+.text.md :deep(th), .text.md :deep(td) { border: 1px solid #e0e3e9; padding: 4px 10px; text-align: left; white-space: nowrap; }
+.text.md :deep(th) { background: #f3f5f9; font-weight: 600; }
+.status-line { margin-top: 6px; font-size: 12px; color: #909399; }
+.mode-switch { margin-right: 4px; }
+.action-card { margin-top: 10px; padding: 10px 12px; border: 1px solid #f3d19e; background: #fdf6ec; border-radius: 8px; }
+.action-card.done { border-color: #c2e7b0; background: #f0f9eb; }
+.action-title { font-weight: 600; margin-bottom: 6px; }
+.action-summary { font-size: 13px; color: #606266; margin-bottom: 6px; }
+.action-summary span { margin-right: 12px; }
+.action-lines { font-size: 13px; }
+.action-lines table { border-collapse: collapse; }
+.action-lines th, .action-lines td { border: 1px solid #e0e3e9; padding: 3px 8px; white-space: nowrap; }
+.action-lines th { background: #fff; }
+.action-warn { margin-top: 6px; font-size: 12px; color: #e6a23c; }
+.action-foot { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+.action-result { font-size: 13px; color: #67c23a; }
 .typing { color: #909399; font-variant-numeric: tabular-nums; }
 .caret { color: #409eff; animation: blink 1s steps(1) infinite; margin-left: 1px; }
 @keyframes blink { 50% { opacity: 0; } }

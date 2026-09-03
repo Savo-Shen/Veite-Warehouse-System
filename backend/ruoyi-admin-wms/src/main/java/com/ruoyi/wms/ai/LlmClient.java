@@ -20,19 +20,31 @@ public interface LlmClient {
      * @param tools    OpenAI 格式的工具定义列表（可为空），形如 {@code {type:"function", function:{...}}}
      * @return 模型返回结果（文本、工具调用、原始 assistant 消息、结束原因）
      */
-    LlmResult chat(List<Map<String, Object>> messages, List<Map<String, Object>> tools);
+    LlmResult chat(List<Map<String, Object>> messages, List<Map<String, Object>> tools, String model);
+
+    /** 用默认模型 */
+    default LlmResult chat(List<Map<String, Object>> messages, List<Map<String, Object>> tools) {
+        return chat(messages, tools, null);
+    }
 
     /**
      * 流式对话补全：文本增量通过 {@code onContentDelta} 实时回调；返回装配好的完整结果。
      * 默认实现退化为非流式（一次性把整段文本回调出去），供未实现流式的客户端兜底。
+     *
+     * @param model 模型名；null 用配置里的默认模型
      */
-    default LlmResult chatStream(List<Map<String, Object>> messages, List<Map<String, Object>> tools,
+    default LlmResult chatStream(List<Map<String, Object>> messages, List<Map<String, Object>> tools, String model,
                                  java.util.function.Consumer<String> onContentDelta) {
-        LlmResult r = chat(messages, tools);
+        LlmResult r = chat(messages, tools, model);
         if (onContentDelta != null && r.content != null && !r.content.isEmpty()) {
             onContentDelta.accept(r.content);
         }
         return r;
+    }
+
+    default LlmResult chatStream(List<Map<String, Object>> messages, List<Map<String, Object>> tools,
+                                 java.util.function.Consumer<String> onContentDelta) {
+        return chatStream(messages, tools, null, onContentDelta);
     }
 
     /**

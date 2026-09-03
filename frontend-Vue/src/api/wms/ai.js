@@ -17,12 +17,12 @@ export function aiChat(message, conversationId) {
  * handlers: { onMeta, onStatus, onDelta, onDone, onError, signal }
  */
 export function aiChatStream(message, conversationId, handlers = {}) {
-  const { onMeta, onStatus, onDelta, onDone, onError, signal } = handlers
+  const { onMeta, onStatus, onDelta, onDone, onError, signal, mode } = handlers
   const base = import.meta.env.VITE_APP_BASE_API || ''
   return fetch(base + '/wms/ai/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken() },
-    body: JSON.stringify({ message, conversationId }),
+    body: JSON.stringify({ message, conversationId, mode: mode || 'fast' }),
     signal
   }).then(async (resp) => {
     if (!resp.ok || !resp.body) {
@@ -84,5 +84,14 @@ export function deleteConversation(id) {
   return request({
     url: `/wms/ai/conversations/${id}`,
     method: 'delete'
+  })
+}
+
+// 执行某条助手消息里的“待确认操作”（库位调整 / 新建往来单位 / 新建商品）
+export function executeAiAction(messageId) {
+  return request({
+    url: `/wms/ai/actions/${messageId}/execute`,
+    method: 'post',
+    timeout: 30000
   })
 }

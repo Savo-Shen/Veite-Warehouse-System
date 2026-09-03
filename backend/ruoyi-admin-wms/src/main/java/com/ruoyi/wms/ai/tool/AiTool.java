@@ -11,7 +11,7 @@ import java.util.Map;
  * AI 可调用的工具（function calling）。
  * <p>
  * 每个工具 = 名称 + 描述 + 入参 JSON Schema + 执行逻辑。执行逻辑直接调用现有 WMS Service，
- * 因此天然继承登录态与权限校验。当前阶段都是只读工具，可自动执行。
+ * 因此天然继承登录态与权限校验。查询类工具只读；建单类工具只产出草稿，不落库。
  *
  * @author Savo
  */
@@ -19,6 +19,11 @@ public interface AiTool {
 
     /** 工具名（英文、唯一），模型据此调用 */
     String name();
+
+    /** 给用户看的中文状态提示，如“正在查库存”。流式对话时显示在气泡里 */
+    default String title() {
+        return "正在调用 " + name();
+    }
 
     /**
      * 使用该工具所需的权限标识，与对应业务接口保持一致。
@@ -29,6 +34,16 @@ public interface AiTool {
      */
     default String requiredPermission() {
         return null;
+    }
+
+    /**
+     * 该工具内部会用到的全部权限（跨出库/入库的工具会用到两个）。
+     * 只要其中任意一个有权，工具就对模型可见；细粒度的分支校验由工具自己用
+     * {@link AiToolContext#has(String)} 完成。
+     */
+    default List<String> permissionsUsed() {
+        String p = requiredPermission();
+        return p == null ? List.of() : List.of(p);
     }
 
     /** 工具描述：写清楚“什么时候用、能得到什么”，模型据此决定是否调用 */
@@ -53,6 +68,17 @@ public interface AiTool {
      */
     default boolean producesDraft() {
         return false;
+    }
+
+    /**
+     * 喂给模型的精简版结果。
+     * <p>
+     * 草稿工具的完整结果带着前端表单需要的整块 item/itemSku 对象，几十行就是几十 KB，
+     * 全塞给模型既慢又贵还容易撑爆上下文；模型其实只需要知道每行是什么、多少、多少钱。
+     * 默认原样返回。
+     */
+    default String summarizeForModel(String result) {
+        return result;
     }
 
     /**

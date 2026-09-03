@@ -54,7 +54,7 @@ public class OpenAiCompatLlmClient implements LlmClient {
     }
 
     /** 配置校验 + 构造请求（stream 决定是否走流式） */
-    private HttpRequest buildRequest(List<Map<String, Object>> messages, List<Map<String, Object>> tools, boolean stream) {
+    private HttpRequest buildRequest(List<Map<String, Object>> messages, List<Map<String, Object>> tools, boolean stream, String model) {
         boolean baseUrlMissing = props.getBaseUrl() == null || props.getBaseUrl().isBlank();
         boolean keyMissing = props.getApiKey() == null || props.getApiKey().isBlank();
         if (baseUrlMissing) {
@@ -66,9 +66,12 @@ public class OpenAiCompatLlmClient implements LlmClient {
         }
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", props.getModel());
+        body.put("model", model == null || model.isBlank() ? props.getModel() : model);
         body.put("messages", messages);
         body.put("stream", stream);
+        if (stream) {
+            body.put("stream_options", Map.of("include_usage", true));
+        }
         if (tools != null && !tools.isEmpty()) {
             body.put("tools", tools);
             body.put("tool_choice", "auto");
@@ -92,8 +95,8 @@ public class OpenAiCompatLlmClient implements LlmClient {
     }
 
     @Override
-    public LlmResult chat(List<Map<String, Object>> messages, List<Map<String, Object>> tools) {
-        HttpRequest request = buildRequest(messages, tools, false);
+    public LlmResult chat(List<Map<String, Object>> messages, List<Map<String, Object>> tools, String model) {
+        HttpRequest request = buildRequest(messages, tools, false, model);
 
         int lastStatus = -1;
         String lastBody = null;
@@ -173,25 +176,53 @@ public class OpenAiCompatLlmClient implements LlmClient {
     }
 
     @Override
-    public LlmResult chatStream(List<Map<String, Object>> messages, List<Map<String, Object>> tools,
+    public LlmResult chatStream(List<Map<String, Object>> messages, List<Map<String, Object>> tools, String model,
                                 Consumer<String> onContentDelta) {
-        HttpRequest request = buildRequest(messages, tools, true);
+        HttpRequest request = buildRequest(messages, tools, true, model);
+        int attempts = Math.max(1, props.getMaxRetries() + 1);
+        Exception lastError = null;
 
-        HttpResponse<Stream<String>> resp;
-        try {
-            resp = client().send(request, HttpResponse.BodyHandlers.ofLines());
-        } catch (Exception e) {
-            throw new ServiceException("调用大模型网关失败：" + e.getMessage());
+        for (int i = 0; i < attempts; i++) {
+            // 已经往前端吐过文字就不能再重试了，否则用户会看到重复的一段
+            boolean[] emitted = {false};
+            try {
+                HttpResponse<Stream<String>> resp = client().send(request, HttpResponse.BodyHandlers.ofLines());
+                int sc = resp.statusCode();
+                if (sc < 200 || sc >= 300) {
+                    String body;
+                    try (Stream<String> lines = resp.body()) {
+                        body = lines.collect(Collectors.joining("\n"));
+                    }
+                    boolean retryable = isRetryable(sc, body) && i < attempts - 1;
+                    log.warn("LLM 流式返回 {}（第{}/{}次{}） body={}", sc, i + 1, attempts, retryable ? ",可重试" : "", truncate(body));
+                    if (!retryable) {
+                        throw new ServiceException(buildHttpError(sc, body));
+                    }
+                    sleepBackoff(i);
+                    continue;
+                }
+                return consumeStream(resp, onContentDelta, emitted);
+            } catch (ServiceException se) {
+                throw se;
+            } catch (Exception e) {
+                lastError = e;
+                log.warn("调用大模型网关(流式)第{}/{}次异常: {}", i + 1, attempts, e.getMessage());
+                if (emitted[0] || i == attempts - 1) {
+                    break;
+                }
+                sleepBackoff(i);
+            }
         }
-        if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-            String body = resp.body().collect(Collectors.joining("\n"));
-            log.warn("LLM 流式返回非 2xx: {} body={}", resp.statusCode(), body);
-            throw new ServiceException(buildHttpError(resp.statusCode(), body));
-        }
+        String msg = lastError == null ? "未知错误" : lastError.getMessage();
+        throw new ServiceException("调用大模型网关失败（重试" + attempts + "次仍失败）：" + msg);
+    }
 
+    /** 逐行消费 SSE 流，把文本增量实时回调、工具调用片段按 index 拼装 */
+    private LlmResult consumeStream(HttpResponse<Stream<String>> resp, Consumer<String> onContentDelta, boolean[] emitted) {
         StringBuilder content = new StringBuilder();
         Map<Integer, ToolAcc> toolAcc = new TreeMap<>();
         String[] finishReason = {null};
+        JsonNode[] usage = {null};
 
         try (Stream<String> lines = resp.body()) {
             lines.forEach(line -> {
@@ -203,7 +234,11 @@ public class OpenAiCompatLlmClient implements LlmClient {
                     return;
                 }
                 try {
-                    JsonNode choice = objectMapper.readTree(data).path("choices").path(0);
+                    JsonNode root = objectMapper.readTree(data);
+                    if (root.hasNonNull("usage")) {
+                        usage[0] = root.get("usage");
+                    }
+                    JsonNode choice = root.path("choices").path(0);
                     JsonNode fr = choice.path("finish_reason");
                     if (fr.isTextual()) {
                         finishReason[0] = fr.asText();
@@ -213,6 +248,7 @@ public class OpenAiCompatLlmClient implements LlmClient {
                     if (c.isTextual() && !c.asText().isEmpty()) {
                         content.append(c.asText());
                         if (onContentDelta != null) {
+                            emitted[0] = true;
                             onContentDelta.accept(c.asText());
                         }
                     }
@@ -236,6 +272,9 @@ public class OpenAiCompatLlmClient implements LlmClient {
                     log.debug("跳过无法解析的流片段: {}", data);
                 }
             });
+        }
+        if (usage[0] != null) {
+            log.info("LLM 用量: prompt={} completion={}", usage[0].path("prompt_tokens").asInt(), usage[0].path("completion_tokens").asInt());
         }
 
         LlmResult result = new LlmResult();

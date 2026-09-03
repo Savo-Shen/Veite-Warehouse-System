@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.ruoyi.common.core.exception.ServiceException;
 import com.ruoyi.common.satoken.utils.LoginHelper;
+import com.ruoyi.wms.ai.tool.DraftSupport;
 import com.ruoyi.wms.ai.domain.AiConversation;
 import com.ruoyi.wms.ai.domain.AiMessage;
 import com.ruoyi.wms.ai.mapper.AiConversationMapper;
@@ -27,9 +28,16 @@ public class AiConversationService {
 
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
+    private final DraftSupport draftSupport;
 
     /** 作为大模型上下文回放的最大历史消息条数 */
-    private static final int HISTORY_LIMIT = 10;
+    private static final int HISTORY_LIMIT = 16;
+
+    /** 单条历史消息回放给模型的最大字符数（用户贴的长清单、超长回复都截断，别撑爆上下文） */
+    private static final int HISTORY_MAX_CHARS = 6000;
+
+    /** 上一轮草稿摘要回放的最大字符数 */
+    private static final int DRAFT_SUMMARY_MAX_CHARS = 3000;
 
     /** 我的会话列表（按更新时间倒序） */
     public List<AiConversation> listMine() {
@@ -56,7 +64,12 @@ public class AiConversationService {
         return c;
     }
 
-    /** 加载会话最近若干条消息，转成大模型上下文（仅 role+content 文本） */
+    /**
+     * 加载会话最近若干条消息，转成大模型上下文。
+     * <p>
+     * 助手消息如果带了草稿，把草稿的精简摘要（哪些商品、数量、单价、skuId）一并回放，
+     * 这样用户接着说“把第二个改成 3 卷”“再加一个接头”时模型知道上一张草稿里有什么。
+     */
     public List<java.util.Map<String, Object>> loadHistory(Long conversationId) {
         List<AiMessage> recent = messageMapper.selectList(Wrappers.<AiMessage>lambdaQuery()
             .eq(AiMessage::getConversationId, conversationId)
@@ -69,14 +82,28 @@ public class AiConversationService {
             if (m.getContent() == null || m.getContent().isBlank()) {
                 continue;
             }
-            history.add(java.util.Map.of("role", m.getRole(), "content", m.getContent()));
+            String content = truncate(m.getContent(), HISTORY_MAX_CHARS);
+            if ("assistant".equals(m.getRole()) && m.getDraft() != null && !m.getDraft().isBlank()) {
+                String summary = draftSupport.summarizeGeneric(m.getDraft());
+                if (summary != null && !summary.equals(m.getDraft())) {
+                    content += "\n\n[本轮生成的草稿摘要，供后续修改参考]\n" + truncate(summary, DRAFT_SUMMARY_MAX_CHARS);
+                }
+            }
+            history.add(java.util.Map.of("role", m.getRole(), "content", content));
         }
         return history;
     }
 
-    /** 追加一条消息，并刷新会话更新时间 */
+    private static String truncate(String s, int max) {
+        if (s == null || s.length() <= max) {
+            return s;
+        }
+        return s.substring(0, max) + "…（已截断，原文共 " + s.length() + " 字）";
+    }
+
+    /** 追加一条消息，并刷新会话更新时间；返回消息 id */
     @Transactional
-    public void appendMessage(Long conversationId, String role, String content,
+    public Long appendMessage(Long conversationId, String role, String content,
                               String toolTrace, String draft, Long elapsedMs) {
         AiMessage m = new AiMessage();
         m.setConversationId(conversationId);
@@ -91,6 +118,20 @@ public class AiConversationService {
         update.setId(conversationId);
         update.setUpdateTime(LocalDateTime.now());
         conversationMapper.updateById(update);
+        return m.getId();
+    }
+
+    /** 覆盖某条消息的草稿 JSON（动作执行后回写 executed 标记） */
+    public void updateDraft(Long messageId, String draftJson) {
+        AiMessage upd = new AiMessage();
+        upd.setId(messageId);
+        upd.setDraft(draftJson);
+        messageMapper.updateById(upd);
+    }
+
+    /** 取一条消息（不校验归属，调用方自己校验会话归属） */
+    public AiMessage getMessage(Long messageId) {
+        return messageMapper.selectById(messageId);
     }
 
     /** 某会话的全部消息（校验归属，正序） */
@@ -115,7 +156,7 @@ public class AiConversationService {
         return requireOwned(conversationId, LoginHelper.getUserId());
     }
 
-    private AiConversation requireOwned(Long conversationId, Long userId) {
+    public AiConversation requireOwned(Long conversationId, Long userId) {
         AiConversation c = conversationMapper.selectById(conversationId);
         if (c == null) {
             throw new ServiceException("会话不存在");

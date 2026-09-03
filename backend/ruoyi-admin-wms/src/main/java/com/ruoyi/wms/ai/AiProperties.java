@@ -29,11 +29,22 @@ public class AiProperties {
     /** 模型名，例如 deepseek-v4-flash */
     private String model;
 
+    /** “强”模式用的模型（可选），例如 deepseek-v4-pro。为空则快/强都用 model */
+    private String strongModel;
+
+    /** 选出本次要用的模型：mode=strong 且配了 strongModel 才切换 */
+    public String resolveModel(String mode) {
+        if ("strong".equalsIgnoreCase(mode) && strongModel != null && !strongModel.isBlank()) {
+            return strongModel;
+        }
+        return model;
+    }
+
     /** 单次会话内允许的最大“工具调用 → 再问模型”轮次，防止死循环 */
-    private int maxToolRounds = 5;
+    private int maxToolRounds = 10;
 
     /** 请求超时（秒） */
-    private int timeoutSeconds = 60;
+    private int timeoutSeconds = 120;
 
     /** 失败重试次数（针对偶发的网络中断、限流、上游渠道欠费等可换渠道重试的情况） */
     private int maxRetries = 3;
@@ -50,8 +61,8 @@ public class AiProperties {
         boolean keyPresent = apiKey != null && !apiKey.isBlank();
         String proxy = (proxyHost != null && !proxyHost.isBlank() && proxyPort != null)
             ? (proxyHost + ":" + proxyPort) : "直连(无代理)";
-        log.info("[WMS-AI] 配置加载: baseUrl={}, model={}, apiKey={}, 代理={}",
-            baseUrl, model,
+        log.info("[WMS-AI] 配置加载: baseUrl={}, model={}, strongModel={}, apiKey={}, 代理={}",
+            baseUrl, model, strongModel,
             keyPresent ? ("已配置(长度" + apiKey.length() + ")") : "未配置(空)",
             proxy);
     }

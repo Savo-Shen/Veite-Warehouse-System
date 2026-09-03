@@ -304,14 +304,17 @@ wms:
   ai:
     # 网关地址（不要带 /v1/chat/completions，程序会自动拼）
     base-url: https://llm.savo-shen.com
-    # 模型名
+    # 模型名（“快”模式，默认）
     model: deepseek-v4-flash
+    # “强”模式用的模型：页面上切到「强」时用它，适合多步推理、长清单；留空则快/强都用 model
+    strong-model: deepseek-v4-pro
     # 密钥从环境变量读取：在 backend/.env 里写 WMS_AI_API_KEY=sk-xxx（.env 已被 .gitignore 忽略）
     api-key: ${WMS_AI_API_KEY:}
-    # 单轮对话内最多“调工具→再问模型”的轮次
-    max-tool-rounds: 5
-    # 请求超时（秒）
-    timeout-seconds: 60
+    # 单轮对话内最多“调工具→再问模型”的轮次。复杂任务（查单→复制→改价）要串好几步，给宽一点；
+    # 用完轮次也不会硬断，会让模型基于已查到的信息收尾
+    max-tool-rounds: 10
+    # 单次模型请求超时（秒）。几十行的建单草稿模型要生成很长的参数，60s 不够
+    timeout-seconds: 120
     # 偶发网络中断的重试次数
     max-retries: 2
     # 可选：本机代理（解决到 Cloudflare 的握手被重置）。例如 clash 默认 127.0.0.1:7890
